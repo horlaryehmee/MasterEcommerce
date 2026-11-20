@@ -20,23 +20,35 @@ return new class extends Migration
         'GBP' => 'Europe/London', 'EUR' => 'Europe/Berlin', 'USD' => 'America/New_York',
     ];
 
+    /**
+     * Each step skips what already exists: MySQL can't roll back table changes, so a run
+     * that stopped halfway (e.g. on a server with stricter MySQL settings) can simply be repeated.
+     * Required date columns use dateTime: on MySQL servers with explicit_defaults_for_timestamp=OFF
+     * a second NOT NULL timestamp gets an invalid implicit default ("1067 Invalid default value").
+     */
     public function up(): void
     {
-        Schema::table('business_settings', function (Blueprint $table) {
-            $table->boolean('stats_enabled')->default(true)->after('track_admins');
-            $table->string('timezone', 64)->default('Africa/Lagos')->after('stats_enabled');
-        });
+        if (! Schema::hasColumn('business_settings', 'stats_enabled')) {
+            Schema::table('business_settings', function (Blueprint $table) {
+                $table->boolean('stats_enabled')->default(true)->after('track_admins');
+            });
+        }
+        if (! Schema::hasColumn('business_settings', 'timezone')) {
+            Schema::table('business_settings', function (Blueprint $table) {
+                $table->string('timezone', 64)->default('Africa/Lagos')->after('stats_enabled');
+            });
 
-        $currency = DB::table('business_settings')->value('currency_code');
-        if ($currency) {
-            DB::table('business_settings')->update(['timezone' => self::CURRENCY_TIMEZONE[$currency] ?? 'UTC']);
+            $currency = DB::table('business_settings')->value('currency_code');
+            if ($currency) {
+                DB::table('business_settings')->update(['timezone' => self::CURRENCY_TIMEZONE[$currency] ?? 'UTC']);
+            }
         }
 
-        Schema::create('stats_visitors', function (Blueprint $table) {
+        $this->createTable('stats_visitors', function (Blueprint $table) {
             $table->id();
             $table->char('uid', 36)->unique(); // random ID kept in the visitor's browser
-            $table->timestamp('first_seen_at');
-            $table->timestamp('last_seen_at')->index();
+            $table->dateTime('first_seen_at');
+            $table->dateTime('last_seen_at')->index();
             $table->char('country_code', 2)->nullable()->index();
             $table->string('region', 80)->nullable();
             $table->string('city', 80)->nullable();
@@ -50,12 +62,12 @@ return new class extends Migration
             $table->unsignedInteger('pageviews_count')->default(0);
         });
 
-        Schema::create('stats_sessions', function (Blueprint $table) {
+        $this->createTable('stats_sessions', function (Blueprint $table) {
             $table->id();
             $table->foreignId('visitor_id')->constrained('stats_visitors')->cascadeOnDelete();
             $table->char('sid', 36)->unique();
-            $table->timestamp('started_at');
-            $table->timestamp('last_activity_at')->index();
+            $table->dateTime('started_at');
+            $table->dateTime('last_activity_at')->index();
             $table->date('local_date')->index();
             $table->boolean('is_new_visitor')->default(false);
             $table->unsignedSmallInteger('pageviews')->default(0);
@@ -81,14 +93,14 @@ return new class extends Migration
             $table->index(['local_date', 'country_code']);
         });
 
-        Schema::create('stats_pageviews', function (Blueprint $table) {
+        $this->createTable('stats_pageviews', function (Blueprint $table) {
             $table->id();
             $table->foreignId('session_id')->constrained('stats_sessions')->cascadeOnDelete();
             $table->foreignId('visitor_id')->constrained('stats_visitors')->cascadeOnDelete();
             $table->char('pid', 36)->unique(); // lets engagement pings update this view
             $table->string('path', 255);
             $table->string('title', 200)->nullable();
-            $table->timestamp('created_at')->index();
+            $table->dateTime('created_at')->index();
             $table->date('local_date');
             $table->unsignedTinyInteger('local_hour');
             $table->unsignedInteger('engaged_seconds')->default(0);
@@ -96,7 +108,7 @@ return new class extends Migration
             $table->index(['local_date', 'path']);
         });
 
-        Schema::create('stats_events', function (Blueprint $table) {
+        $this->createTable('stats_events', function (Blueprint $table) {
             $table->id();
             $table->foreignId('session_id')->constrained('stats_sessions')->cascadeOnDelete();
             $table->foreignId('visitor_id')->constrained('stats_visitors')->cascadeOnDelete();
@@ -104,16 +116,25 @@ return new class extends Migration
             $table->string('name', 30);
             $table->string('label', 255)->nullable();
             $table->decimal('value', 14, 2)->nullable();
-            $table->timestamp('created_at');
+            $table->dateTime('created_at');
             $table->date('local_date');
 
             $table->index(['local_date', 'name']);
         });
 
-        Schema::table('orders', function (Blueprint $table) {
-            // Which visitor placed the order (for the visitor timeline).
-            $table->foreignId('stats_visitor_id')->nullable()->after('id')->constrained('stats_visitors')->nullOnDelete();
-        });
+        if (! Schema::hasColumn('orders', 'stats_visitor_id')) {
+            Schema::table('orders', function (Blueprint $table) {
+                // Which visitor placed the order (for the visitor timeline).
+                $table->foreignId('stats_visitor_id')->nullable()->after('id')->constrained('stats_visitors')->nullOnDelete();
+            });
+        }
+    }
+
+    protected function createTable(string $name, \Closure $definition): void
+    {
+        if (! Schema::hasTable($name)) {
+            Schema::create($name, $definition);
+        }
     }
 
     public function down(): void
