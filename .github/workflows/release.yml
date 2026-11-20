@@ -1,0 +1,75 @@
+# Builds a ready-to-install package for one-click updates (Admin → Updates).
+#
+# Publish a new version:
+#   1. Put the new version number in the VERSION file and commit.
+#   2. git tag v1.2.0 && git push origin v1.2.0
+# This workflow then attaches catalog-v1.2.0.zip (PHP dependencies and compiled
+# assets included) to a GitHub release, and every site using this repository
+# shows "Version 1.2.0 is available" in its admin.
+#
+# Release notes: edit the release on GitHub afterwards; they are shown in the admin.
+
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check VERSION matches the tag
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          FILE="$(tr -d '[:space:]' < VERSION)"
+          if [ "$TAG" != "$FILE" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match VERSION ($FILE). Update the VERSION file, commit, and tag again."
+            exit 1
+          fi
+
+      # The lowest PHP version the sites run on, so the bundled packages work there.
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: gd, zip, intl, pdo_mysql, mbstring
+          tools: composer:v2
+
+      - name: Install PHP dependencies (production)
+        run: composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist --no-progress
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Build assets
+        run: |
+          npm ci --include=dev
+          npm run build
+
+      - name: Create package
+        run: |
+          NAME="catalog-${GITHUB_REF_NAME}.zip"
+          # Caches generated on this build machine must not ship.
+          rm -f bootstrap/cache/*.php
+          zip -rq "$NAME" . \
+            -x '.git/*' '.github/*' 'node_modules/*' 'tests/*' '.env' '.env.backup' 'modules/*' 'extensions/*' \
+               'storage/logs/*.log' 'storage/framework/cache/data/*' 'storage/framework/sessions/*' \
+               'storage/framework/views/*.php' 'storage/app/public/*' 'storage/app/updates/*' \
+               'storage/app/installed.json' 'storage/app/installing.json' 'storage/app/agent/*' \
+               'public/storage' 'public/hot' '*.zip'
+          sha256sum "$NAME" > "$NAME.sha256"
+          echo "PACKAGE=$NAME" >> "$GITHUB_ENV"
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ env.PACKAGE }}
+            ${{ env.PACKAGE }}.sha256
+          generate_release_notes: true
