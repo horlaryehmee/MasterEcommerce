@@ -252,7 +252,11 @@ class UpdaterTest extends TestCase
                     'digest' => $digest ? "sha256:{$digest}" : null,
                 ]],
             ]),
-            'api.github.com/repos/acme/catalog/releases/assets/1' => Http::response($this->zipBytes),
+            // Like the real API: the file only when octet-stream is the *only* accepted type,
+            // otherwise the asset's JSON description.
+            'api.github.com/repos/acme/catalog/releases/assets/1' => fn ($request) => $request->header('Accept') === ['application/octet-stream']
+                ? Http::response($this->zipBytes, 200, ['Content-Type' => 'application/octet-stream'])
+                : Http::response(['id' => 1, 'name' => "catalog-{$tag}.zip", 'state' => 'uploaded']),
         ]);
         cache()->forget('updater.latest');
     }

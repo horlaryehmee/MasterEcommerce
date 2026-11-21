@@ -227,8 +227,10 @@ class Updater
         $this->ensureDir($this->workPath);
         $zip = $this->workPath.'/package.zip';
 
+        // replaceHeaders, not withHeaders: withHeaders would *add* octet-stream to the JSON Accept
+        // header, and GitHub then answers with the asset's JSON description instead of the file.
         $response = $this->github()
-            ->withHeaders(['Accept' => 'application/octet-stream'])
+            ->replaceHeaders(['Accept' => 'application/octet-stream'])
             ->timeout(600)
             ->withOptions(['sink' => $zip])
             ->get($status['asset']['api_url']);
@@ -864,7 +866,7 @@ class Updater
         if (! $url) {
             return null;
         }
-        $body = $this->github()->withHeaders(['Accept' => 'application/octet-stream'])->get($url)->body();
+        $body = $this->github()->replaceHeaders(['Accept' => 'application/octet-stream'])->get($url)->body();
 
         return preg_match('/\b([a-f0-9]{64})\b/i', $body, $m) ? $m[1] : null;
     }
