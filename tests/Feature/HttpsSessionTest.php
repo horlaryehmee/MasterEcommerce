@@ -37,6 +37,21 @@ class HttpsSessionTest extends TestCase
         $this->assertSame('10.0.0.5', request()->ip());
     }
 
+    public function test_expired_session_on_a_save_redirects_with_303_so_the_browser_does_not_repeat_the_put(): void
+    {
+        // A 302 would make the browser repeat the PUT on the settings page: "405 Method Not Allowed".
+        $this->actingAsAdmin();
+        $this->withMiddleware(\Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class);
+        $this->app->instance('env', 'production'); // CSRF is skipped when running unit tests
+
+        $response = $this->from('/admin/settings?tab=email')
+            ->withHeaders(['X-Inertia' => 'true', 'X-XSRF-TOKEN' => 'expired'])
+            ->put('/admin/settings/email', ['mail_mailer' => 'sendmail']);
+
+        $response->assertStatus(303)->assertRedirect('/admin/settings?tab=email')
+            ->assertSessionHas('error', 'Your session expired. Please try again.');
+    }
+
     public function test_no_redirect_when_store_address_is_http(): void
     {
         config(['app.url' => 'http://localhost']);

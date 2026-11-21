@@ -66,7 +66,7 @@ return Application::configure(basePath: dirname(__DIR__))
                 return $response;
             }
             $status = $response->getStatusCode();
-            $friendly = in_array($status, [403, 404, 419, 429, 503], true)
+            $friendly = in_array($status, [403, 404, 405, 419, 429, 503], true)
                 || ($status === 500 && ! config('app.debug'));
 
             if (! $friendly || $request->expectsJson() && ! $request->header('X-Inertia')) {
@@ -74,7 +74,11 @@ return Application::configure(basePath: dirname(__DIR__))
             }
 
             if ($status === 419) {
-                return back()->with('error', 'Your session expired. Please try again.');
+                // 303 for PUT/PATCH/DELETE/POST: browsers repeat a 302 with the same method (PUT on a
+                // GET-only page = "405 Method Not Allowed"). This runs before HandleInertiaRequests,
+                // which would otherwise make that conversion.
+                return back()->with('error', 'Your session expired. Please try again.')
+                    ->setStatusCode($request->isMethod('GET') ? 302 : 303);
             }
 
             return Inertia::render('Error', ['status' => $status])

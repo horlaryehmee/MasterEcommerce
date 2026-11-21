@@ -3,6 +3,7 @@ import { Head, Link, usePage } from '@inertiajs/react';
 const MESSAGES = {
     403: ['Access denied', "You don't have permission to view this page."],
     404: ['Page not found', "Sorry, we couldn't find the page you were looking for. It may have been moved or removed."],
+    405: ["That didn't work", 'This page can’t be opened that way. Go back, reload the page and try again.'],
     429: ['Too many requests', 'Please wait a moment and try again.'],
     500: ['Something went wrong', 'An unexpected error occurred on our side. Please try again shortly.'],
     503: ['Be right back', "We're making some improvements. Please check back in a few minutes."],
