@@ -22,6 +22,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="xsrf-cookie" content="{{ \App\Http\Middleware\ValidateCsrfToken::cookieName() }}">
     <meta name="theme-color" content="{{ $primary }}">
     <meta name="author" content="{{ config('catalog.author.name') }}">
 

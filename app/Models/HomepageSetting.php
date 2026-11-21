@@ -76,6 +76,8 @@ class HomepageSetting extends Model
         'hero_interval' => 6,
         'hero_desktop_height' => 'standard',
         'hero_mobile_height' => 'portrait',
+        'hero_mobile_vh' => 75,
+        'hero_mobile_valign' => 'bottom',
         'hero_dots_position' => 'center',
         'hero_shade' => 'strong',
         'marquee_enabled' => false,
@@ -103,6 +105,8 @@ class HomepageSetting extends Model
         return [
             'announcement_enabled' => 'boolean',
             'marquee_enabled' => 'boolean',
+            'promo_ends_at' => 'datetime',
+            'hero_mobile_vh' => 'integer',
             'marquee_items' => 'array',
             'marquee_border' => 'boolean',
             'marquee_uppercase' => 'boolean',

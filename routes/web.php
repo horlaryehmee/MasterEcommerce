@@ -39,6 +39,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/', Admin\DashboardController::class)->name('dashboard');
 
         Route::patch('products/{product}/toggle', [Admin\ProductController::class, 'toggle'])->name('products.toggle');
+        Route::get('products/export', [Admin\ProductController::class, 'export'])->name('products.export');
+        Route::get('categories/export', [Admin\CategoryController::class, 'export'])->name('categories.export');
         Route::resource('products', Admin\ProductController::class)->except('show');
         Route::resource('categories', Admin\CategoryController::class)->except('show');
 
@@ -54,13 +56,19 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('analytics', [Admin\AnalyticsController::class, 'index'])->name('analytics.index');
         Route::get('analytics/realtime', [Admin\AnalyticsController::class, 'realtime'])->name('analytics.realtime');
         Route::get('analytics/visitors', [Admin\AnalyticsController::class, 'visitors'])->name('analytics.visitors');
+        Route::get('analytics/visitors/export', [Admin\AnalyticsController::class, 'visitorsExport'])->name('analytics.visitors.export');
         Route::get('analytics/visitors/{id}', [Admin\AnalyticsController::class, 'visitor'])->whereNumber('id')->name('analytics.visitor');
 
         Route::get('orders', [Admin\OrderController::class, 'index'])->name('orders.index');
+        Route::get('orders/export', [Admin\OrderController::class, 'export'])->name('orders.export');
+        Route::get('customers', [Admin\CustomerController::class, 'index'])->name('customers.index');
+        Route::get('customers/export', [Admin\CustomerController::class, 'export'])->name('customers.export');
+        Route::get('customers/{key}', [Admin\CustomerController::class, 'show'])->where('key', '[pe][0-9a-f]{4,39}')->name('customers.show');
         Route::get('orders/{order}', [Admin\OrderController::class, 'show'])->name('orders.show');
         Route::patch('orders/{order}', [Admin\OrderController::class, 'update'])->name('orders.update');
 
         Route::patch('coupons/{coupon}/toggle', [Admin\CouponController::class, 'toggle'])->name('coupons.toggle');
+        Route::get('coupons/export', [Admin\CouponController::class, 'export'])->name('coupons.export');
         Route::resource('coupons', Admin\CouponController::class)->except('show');
 
         Route::get('templates', [Admin\TemplateController::class, 'index'])->name('templates.index');

@@ -80,6 +80,54 @@ function Segmented({ label, value, options, onChange }) {
     );
 }
 
+/**
+ * "Height on phones": a share of the screen height, with a phone outline
+ * previewing how much of the first screen the hero fills.
+ */
+function PhoneHeight({ value, onChange, error, below }) {
+    const v = Number(value) || 75;
+    const presets = [
+        [50, 'Half'],
+        [70, 'Tall'],
+        [85, 'Almost full'],
+        [100, 'Full screen'],
+    ];
+    return (
+        <div className="flex gap-5 rounded-xl border border-zinc-200 p-4">
+            <div className="hidden shrink-0 sm:block" aria-hidden>
+                <div className="relative h-36 w-[4.2rem] overflow-hidden rounded-[0.9rem] border-[3px] border-zinc-800 bg-white">
+                    <div className="h-2.5 bg-zinc-100" />
+                    <div className="mx-1 flex items-end justify-center rounded-sm bg-gradient-to-br from-zinc-400 to-zinc-600 pb-1.5 transition-[height] duration-200" style={{ height: `${(v / 100) * 88}%` }}>
+                        <span className="h-1.5 w-6 rounded-full bg-white/90" />
+                    </div>
+                    <div className="mx-1 mt-1 space-y-1">
+                        <span className="block h-1 w-3/4 rounded-full bg-zinc-200" />
+                        <span className="block h-1 w-1/2 rounded-full bg-zinc-200" />
+                    </div>
+                </div>
+            </div>
+            <div className="min-w-0 flex-1">
+                <div className="flex items-baseline justify-between gap-3">
+                    <label htmlFor="hero-mobile-vh" className="text-sm font-medium text-zinc-800">
+                        Height on phones
+                    </label>
+                    <span className="text-sm font-semibold text-zinc-900 tabular-nums">{v}% of the screen</span>
+                </div>
+                <input id="hero-mobile-vh" type="range" min="40" max="100" step="5" value={v} onChange={(e) => onChange(Number(e.target.value))} className="mt-3 w-full accent-zinc-900" />
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                    {presets.map(([p, label]) => (
+                        <button key={p} type="button" onClick={() => onChange(p)} className={`rounded-full px-2.5 py-1 text-xs font-medium ${v === p ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'}`}>
+                            {label}
+                        </button>
+                    ))}
+                </div>
+                <p className="mt-2 text-xs text-zinc-500">{below ? 'The image height; the text sits below it.' : 'How much of the first screen the hero fills. Text and button stay centred.'}</p>
+                {error && <p className="mt-1 text-xs font-medium text-red-600">{error}</p>}
+            </div>
+        </div>
+    );
+}
+
 /* ------------------------------------------------------------------ */
 /* Slides                                                              */
 /* ------------------------------------------------------------------ */
@@ -93,8 +141,6 @@ function SlideEditor({ slide, options, sizes, onDone }) {
         description: slide?.description ?? '',
         button_text: slide?.button_text ?? '',
         button_link: slide?.button_link ?? '',
-        secondary_text: slide?.secondary_text ?? '',
-        secondary_link: slide?.secondary_link ?? '',
         link: slide?.link ?? '',
         text_position: slide?.text_position ?? 'left',
         text_theme: slide?.text_theme ?? 'light',
@@ -131,7 +177,7 @@ function SlideEditor({ slide, options, sizes, onDone }) {
                 />
                 <ImageField
                     label="Phone image (optional)"
-                    help={`Portrait works best, ${sizes.mobile}. If empty, the desktop image is cropped to fit.`}
+                    help={`Tall image, about ${sizes.mobile} for your chosen phone height. If empty, the desktop image is cropped to fit.`}
                     aspect="aspect-[4/5]"
                     currentUrl={slide?.mobile_image_url}
                     file={form.data.mobile_image}
@@ -164,14 +210,12 @@ function SlideEditor({ slide, options, sizes, onDone }) {
                     <div className="grid gap-5 sm:grid-cols-2">
                         <TextInput label="Button text" maxLength={40} optional {...text('button_text')} />
                         <TextInput label="Button link" help={LINK_HELP} optional {...text('button_link')} />
-                        <TextInput label="Second button text" maxLength={40} optional {...text('secondary_text')} />
-                        <TextInput label="Second button link" optional {...text('secondary_link')} />
                     </div>
                     <div className="flex flex-wrap gap-6">
                         <Segmented label="Text position (desktop)" value={form.data.text_position} options={options.positions} onChange={(v) => form.setData('text_position', v)} />
                         <Select label="Text colour" value={form.data.text_theme} onChange={(e) => form.setData('text_theme', e.target.value)} options={Object.entries(options.themes).map(([value, label]) => ({ value, label }))} />
                     </div>
-                    <p className="text-xs text-zinc-500">On phones the text sits at the bottom of the image. A soft shade is added behind the text so it's always readable.</p>
+                    <p className="text-xs text-zinc-500">On phones the text and button are centred, at the bottom or in the middle (see Text position on phones). A soft shade keeps the text readable.</p>
                 </div>
             ) : (
                 <TextInput className="mt-5" label="When tapped, go to" help={LINK_HELP} optional {...text('link')} />
@@ -284,7 +328,8 @@ export default function HeroEditor({ home, slides, options }) {
         hero_autoplay: home.hero_autoplay ?? true,
         hero_interval: home.hero_interval ?? 6,
         hero_desktop_height: home.hero_desktop_height ?? 'standard',
-        hero_mobile_height: home.hero_mobile_height ?? 'portrait',
+        hero_mobile_vh: home.hero_mobile_vh ?? 75,
+        hero_mobile_valign: home.hero_mobile_valign ?? 'bottom',
         hero_mobile_text: home.hero_mobile_text ?? 'overlay',
         hero_dots_position: home.hero_dots_position ?? 'center',
         hero_shade: home.hero_shade ?? 'strong',
@@ -293,8 +338,6 @@ export default function HeroEditor({ home, slides, options }) {
         hero_description: home.hero_description ?? '',
         hero_primary_text: home.hero_primary_text ?? '',
         hero_primary_link: home.hero_primary_link ?? '',
-        hero_secondary_text: home.hero_secondary_text ?? '',
-        hero_secondary_link: home.hero_secondary_link ?? '',
         hero_image: null,
         remove_hero_image: false,
         hero_mobile_image: null,
@@ -306,7 +349,8 @@ export default function HeroEditor({ home, slides, options }) {
     const usesSlider = types.includes('slider');
     const usesSingle = types.includes('split') || types.includes('banner');
     const usesFullImage = types.includes('slider') || types.includes('banner');
-    const sizes = { desktop: options.desktopHeights[d.hero_desktop_height]?.[1], mobile: options.mobileHeights[d.hero_mobile_height]?.[1] };
+    // Recommended phone image: 1080 px wide, as tall as the chosen share of a typical phone screen (390 × 844).
+    const sizes = { desktop: options.desktopHeights[d.hero_desktop_height]?.[1], mobile: `1080 × ${Math.round((1080 * 844 * Number(d.hero_mobile_vh)) / 100 / 390)} px` };
     const devicesFor = (...t) => [d.hero_type_desktop, d.hero_type_mobile].map((x, i) => (t.includes(x) ? ['Desktop', 'Phones'][i] : null)).filter(Boolean).join(' & ');
 
     const submit = (e) => {
@@ -332,7 +376,6 @@ export default function HeroEditor({ home, slides, options }) {
                             <div className="grid gap-5 border-t border-zinc-100 pt-5 sm:grid-cols-3">
                                 <Select label="Banner width" options={Object.entries(options.widths).map(([value, label]) => ({ value, label }))} {...text('hero_width')} />
                                 <Select label="Height on desktop" options={Object.entries(options.desktopHeights).map(([value, [label, size]]) => ({ value, label: `${label} · ${size}` }))} {...text('hero_desktop_height')} />
-                                <Select label="Height on phones" options={Object.entries(options.mobileHeights).map(([value, [label, size]]) => ({ value, label: `${label} · ${size}` }))} {...text('hero_mobile_height')} />
                                 {['slider', 'banner'].includes(d.hero_type_mobile) && (
                                     <Select
                                         className="sm:col-span-3"
@@ -341,6 +384,12 @@ export default function HeroEditor({ home, slides, options }) {
                                         options={Object.entries(options.mobileText).map(([value, label]) => ({ value, label }))}
                                         {...text('hero_mobile_text')}
                                     />
+                                )}
+                                {['slider', 'banner'].includes(d.hero_type_mobile) && d.hero_mobile_text === 'overlay' && (
+                                    <div className="sm:col-span-3">
+                                        <Segmented label="Text position on phones" value={d.hero_mobile_valign} options={{ bottom: 'Bottom', middle: 'Middle' }} onChange={(v) => form.setData('hero_mobile_valign', v)} />
+                                        <p className="mt-1.5 text-xs text-zinc-500">Always centred left to right. Bottom keeps the top of your photo clear.</p>
+                                    </div>
                                 )}
                                 <Select
                                     className="sm:col-span-3"
@@ -351,6 +400,8 @@ export default function HeroEditor({ home, slides, options }) {
                                 />
                             </div>
                         )}
+
+                        {(usesFullImage || d.hero_type_mobile === 'split') && <PhoneHeight value={d.hero_mobile_vh} onChange={(v) => form.setData('hero_mobile_vh', v)} error={form.errors.hero_mobile_vh} below={d.hero_mobile_text === 'below' && d.hero_type_mobile !== 'split'} />}
 
                         {usesSlider && (
                             <div className="grid items-end gap-5 sm:grid-cols-2">
@@ -398,8 +449,6 @@ export default function HeroEditor({ home, slides, options }) {
                         <div className="grid gap-5 sm:grid-cols-2">
                             <TextInput label="Main button text" maxLength={40} {...text('hero_primary_text')} />
                             <TextInput label="Main button link" help={LINK_HELP} {...text('hero_primary_link')} />
-                            <TextInput label="Second button text" maxLength={40} optional {...text('hero_secondary_text')} />
-                            <TextInput label="Second button link" optional {...text('hero_secondary_link')} />
                         </div>
                         {types.includes('banner') && <Segmented label="Banner text alignment" value={d.hero_text_align} options={{ left: 'Left', center: 'Centre' }} onChange={(v) => form.setData('hero_text_align', v)} />}
                     </div>

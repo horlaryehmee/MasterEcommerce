@@ -51,6 +51,11 @@ class DemoHomepageSeeder extends Seeder
 
             'promo_enabled' => true,
             'promo_eyebrow' => 'Home essentials',
+            'promo_badge' => 'Up to 30% off',
+            // A demo offer running for two weeks from installation (the countdown shows on the banner).
+            'promo_ends_at' => now()->addDays(14)->endOfDay(),
+            // Matches the backdrop of the demo photo, so the card and photo read as one scene.
+            'promo_bg_color' => '#E9DCCD',
             'promo_heading' => 'Upgrade your home for less',
             'promo_description' => 'Save on blenders, kettles, fans and lighting. Limited stock available — enquire today to reserve yours.',
             'promo_image_path' => $this->importImage('banners/promo.webp', 'banners'),

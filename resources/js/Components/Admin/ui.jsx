@@ -584,8 +584,36 @@ export function ConfirmModal({ open, onClose, onConfirm, title = 'Are you sure?'
 /* Pagination & empty state                                            */
 /* ------------------------------------------------------------------ */
 
-export function AdminPagination({ paginator }) {
-    if (!paginator || paginator.last_page <= 1) return null;
+/** Rows-per-page picker for lists that use useList(). */
+function PerPage({ list, className = '' }) {
+    return (
+        <label className={`flex items-center gap-2 text-sm text-zinc-500 ${className}`}>
+            Rows
+            <select value={list.filters.per_page} onChange={(e) => list.apply({ per_page: e.target.value })} className="h-9 rounded-lg border border-zinc-200 bg-white px-2 text-sm text-zinc-800">
+                {[10, 25, 50, 100].map((n) => (
+                    <option key={n} value={n}>
+                        {n}
+                    </option>
+                ))}
+            </select>
+        </label>
+    );
+}
+
+export function AdminPagination({ paginator, list }) {
+    if (!paginator) return null;
+    if (paginator.last_page <= 1) {
+        // One page: still show the count and rows picker when the list is long enough to need it.
+        if (!list || paginator.total <= 10) return null;
+        return (
+            <div className="flex items-center justify-between gap-3 border-t border-zinc-100 px-4 py-3 sm:px-5">
+                <p className="text-sm text-zinc-500">
+                    {paginator.total} {paginator.total === 1 ? 'result' : 'results'}
+                </p>
+                <PerPage list={list} />
+            </div>
+        );
+    }
     const prev = paginator.links[0];
     const next = paginator.links[paginator.links.length - 1];
     const pill = 'flex h-11 flex-1 items-center justify-center rounded-xl border text-sm font-semibold transition active:scale-[0.97]';
@@ -612,9 +640,12 @@ export function AdminPagination({ paginator }) {
                 )}
             </div>
             <div className="hidden items-center justify-between gap-3 sm:flex">
-                <p className="text-sm text-zinc-500">
-                    Showing {paginator.from}–{paginator.to} of {paginator.total}
-                </p>
+                <div className="flex items-center gap-4">
+                    <p className="text-sm text-zinc-500">
+                        Showing {paginator.from}–{paginator.to} of {paginator.total}
+                    </p>
+                    {list && <PerPage list={list} />}
+                </div>
                 <div className="flex flex-wrap gap-1">
                     {paginator.links.map((link, i) => {
                         const label = link.label.replace('&laquo;', '‹').replace('&raquo;', '›').replace(/<[^>]+>/g, '');

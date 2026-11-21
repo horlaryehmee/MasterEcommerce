@@ -1,178 +1,153 @@
 import { Link, usePage } from '@inertiajs/react';
-import { ArrowRight, Clock, Mail, MapPin, PackageCheck, Phone, Search } from 'lucide-react';
-import { WhatsAppIcon } from '@/Components/Icons';
-import Breadcrumbs from '@/Components/Store/Breadcrumbs';
-import CategoryCard from '@/Components/Store/CategoryCard';
+import { useMemo } from 'react';
+import { ArrowUpRight, BadgeCheck, Clock, Mail, MapPin, Phone } from 'lucide-react';
 import { WHY_ICONS } from '@/Components/Store/Home/WhyChooseUs';
 import Img from '@/Components/Store/Img';
-import SectionHeading from '@/Components/Store/SectionHeading';
 import WhatsAppButton from '@/Components/Store/WhatsAppButton';
 import StoreLayout from '@/Layouts/StoreLayout';
+import './about.css';
 
-const STEPS = [
-    { icon: Search, title: 'Browse our catalogue', text: 'Explore our products with clear photos, descriptions and up-to-date prices.' },
-    { icon: WhatsAppIcon, title: 'Enquire on WhatsApp', text: 'Tap the WhatsApp button on any product. We reply to confirm availability and answer your questions.' },
-    { icon: PackageCheck, title: 'Get your order', text: 'Agree on payment and delivery or pick-up directly with us — simple, personal and secure.' },
-];
+function splitAboutContent(html) {
+    const story = document.createElement('template');
+    story.innerHTML = html || '';
+    const sections = [];
 
-function ContactItem({ icon: Icon, label, children }) {
-    return (
-        <div className="flex gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/10">
-                <Icon size={18} />
-            </span>
-            <div className="min-w-0">
-                <p className="text-xs font-semibold tracking-wider uppercase opacity-60">{label}</p>
-                <div className="mt-0.5 text-sm whitespace-pre-line opacity-90">{children}</div>
-            </div>
-        </div>
-    );
+    // Move the named Markdown sections intact, including any lists and subheadings.
+    for (const heading of story.content.querySelectorAll('h2')) {
+        if (heading.parentNode !== story.content || !/^(what we offer|our promise)$/i.test(heading.textContent.trim())) continue;
+        const section = document.createElement('template');
+        let node = heading;
+        do {
+            const next = node.nextSibling;
+            section.content.append(node);
+            node = next;
+        } while (node && !node.matches?.('h1, h2'));
+        sections.push(section.innerHTML);
+    }
+
+    return { storyHtml: story.innerHTML.trim(), sections };
 }
 
-export default function About({ page, values, categories, contact }) {
+export default function About({ page, values, contact, categories = [], stats = [], quote }) {
     const { brand } = usePage().props;
-    const hasContact = contact.phone || contact.email || contact.address || contact.opening_hours;
+    const { storyHtml, sections } = useMemo(() => splitAboutContent(page.content_html), [page.content_html]);
+    const collection = categories.find(category => category.image?.src && category.url);
+    const details = [
+        ['Email', Mail, contact.email, contact.email && `mailto:${contact.email}`],
+        ['Phone', Phone, contact.phone, contact.phone && `tel:${contact.phone.replace(/[^\d+]/g, '')}`],
+        ['Address', MapPin, contact.address],
+        ['Opening hours', Clock, contact.opening_hours],
+    ].filter(([, , value]) => value);
+
+    const founderNote = quote && (
+        <blockquote className="profile-note mt-5 rounded-r-lg border-l-2 border-brand px-5 py-4">
+            <p className="leading-relaxed">&ldquo;{quote.text}&rdquo;</p>
+            {(quote.name || quote.role) && <footer className="mt-2 text-sm text-stone-600">{[quote.name, quote.role].filter(Boolean).join(', ')}</footer>}
+        </blockquote>
+    );
 
     return (
         <StoreLayout>
-            {/* Hero */}
-            <section className="bg-surface text-on-surface">
-                <div className={`container-page grid items-center gap-10 py-10 sm:py-14 lg:gap-16 lg:py-20 ${page.image ? 'lg:grid-cols-2' : ''}`}>
-                    <div className={page.image ? '' : 'max-w-3xl'}>
-                        <Breadcrumbs items={[{ label: 'Home', href: '/' }, { label: page.title }]} />
-                        <p className="mt-6 text-xs font-semibold tracking-[0.18em] text-accent uppercase">{brand.name}</p>
-                        <h1 className="mt-3 text-4xl leading-[1.1] font-extrabold tracking-tight text-balance text-stone-950 sm:text-5xl">{page.title}</h1>
-                        {page.intro && <p className="mt-5 max-w-xl text-lg leading-relaxed text-stone-600">{page.intro}</p>}
-                        <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-                            <Link href="/products" className="btn-primary h-12 px-6">
-                                Browse products <ArrowRight size={17} />
-                            </Link>
-                            <WhatsAppButton className="h-12 px-6">Chat with us</WhatsAppButton>
-                        </div>
+            <article className="about-profile">
+                <header className={'profile-cover' + (page.image?.src ? ' has-image' : '')}>
+                    {page.image?.src && <Img image={page.image} alt="" eager sizes="(min-width: 768px) 70vw, 100vw" className="profile-cover-image" />}
+                    <div className="profile-width profile-cover-copy">
+                        {brand.name && page.title !== brand.name && <p className="mb-3 text-sm font-medium">{page.title}</p>}
+                        <h1 className="max-w-[18ch] text-[clamp(2.7rem,5vw,5rem)] leading-[1.04] font-semibold tracking-[-0.045em]">{brand.name || page.title}</h1>
+                        {page.intro && <p className="mt-4 max-w-[41ch] text-base leading-relaxed sm:text-lg">{page.intro}</p>}
                     </div>
-                    {page.image && (
-                        <div className="aspect-[6/5] overflow-hidden rounded-[2rem] bg-white/50">
-                            <Img image={page.image} eager sizes="(min-width: 1024px) 50vw, 100vw" className="h-full w-full object-cover" />
-                        </div>
-                    )}
-                </div>
-            </section>
+                </header>
 
-            {/* Story */}
-            {page.content_html && (
-                <section className="py-14 sm:py-20">
-                    <div className="container-page">
-                        <div className="rich-text mx-auto max-w-3xl sm:prose-lg [&>p:first-child]:text-xl [&>p:first-child]:leading-relaxed [&>p:first-child]:font-medium [&>p:first-child]:text-stone-800" dangerouslySetInnerHTML={{ __html: page.content_html }} />
-                    </div>
-                </section>
-            )}
-
-            {/* How it works */}
-            <section className="border-y border-stone-100 bg-stone-50 py-14 sm:py-20">
-                <div className="container-page">
-                    <SectionHeading title="How shopping with us works" subtitle="No accounts, no complicated checkout — just a friendly conversation." align="center" />
-                    <ol className="grid gap-4 sm:gap-6 md:grid-cols-3">
-                        {STEPS.map((step, i) => (
-                            <li key={step.title} className="relative rounded-3xl bg-white p-6 sm:p-8">
-                                <span className="absolute top-6 right-6 text-5xl font-extrabold text-stone-100 sm:top-8 sm:right-8" aria-hidden>
-                                    {i + 1}
-                                </span>
-                                <span className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-brand text-on-brand">
-                                    <step.icon size={22} />
-                                </span>
-                                <h3 className="relative mt-5 text-lg font-semibold text-stone-900">
-                                    <span className="sr-only">Step {i + 1}: </span>
-                                    {step.title}
-                                </h3>
-                                <p className="relative mt-2 text-sm leading-relaxed text-stone-600">{step.text}</p>
-                            </li>
-                        ))}
-                    </ol>
-                </div>
-            </section>
-
-            {/* Values (from "Why choose us") */}
-            {values && (
-                <section className="py-14 sm:py-20">
-                    <div className="container-page">
-                        <SectionHeading title={values.heading} subtitle={values.subheading} align="center" />
-                        <div className={`grid gap-x-8 gap-y-10 sm:grid-cols-2 ${values.items.length >= 4 ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
-                            {values.items.map((item, i) => {
-                                const Icon = WHY_ICONS[item.icon] || WHY_ICONS['badge-check'];
-                                return (
-                                    <div key={i} className="text-center sm:text-left">
-                                        <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-accent/10 text-accent sm:mx-0">
-                                            <Icon size={24} strokeWidth={1.8} />
-                                        </span>
-                                        <h3 className="mt-4 text-base font-semibold text-stone-900">{item.title}</h3>
-                                        {item.text && <p className="mt-2 text-sm leading-relaxed text-stone-600">{item.text}</p>}
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
-                </section>
-            )}
-
-            {/* Collections */}
-            {categories.length > 0 && (
-                <section className={`py-14 sm:py-20 ${values ? 'border-t border-stone-100' : ''}`}>
-                    <div className="container-page">
-                        <SectionHeading title="Explore our collections" link="/categories" linkLabel="All categories" />
-                        <div className="grid grid-cols-2 gap-x-4 gap-y-8 sm:gap-x-6 lg:grid-cols-4">
-                            {categories.map((c) => (
-                                <CategoryCard key={c.id} category={c} />
+                <div className="profile-width profile-body">
+                    {stats.length > 0 && (
+                        <dl aria-label="Business figures" className="profile-facts">
+                            {stats.map((stat, index) => (
+                                <div key={index} className="flex flex-col rounded-xl border border-stone-200 px-4 py-3 sm:px-5">
+                                    <dt className="mt-1 text-sm text-stone-600">{stat.label}</dt>
+                                    <dd className="order-first text-2xl font-semibold tracking-tight">{stat.value}</dd>
+                                </div>
                             ))}
-                        </div>
-                    </div>
-                </section>
-            )}
+                        </dl>
+                    )}
 
-            {/* Contact band */}
-            <section className="pb-14 sm:pb-20">
-                <div className="container-page">
-                    <div className={`grid gap-10 overflow-hidden rounded-[2rem] bg-brand p-8 text-on-brand sm:p-12 ${hasContact ? 'lg:grid-cols-2 lg:items-center' : ''}`}>
+                    {(storyHtml || (!sections.length && quote)) && (
+                        <section id="our-story" aria-label="Our story" className="profile-story-layout">
+                            <div className="min-w-0 max-w-[66ch]">
+                                {page.headline && <h2 className="profile-heading mb-4">{page.headline}</h2>}
+                                {storyHtml && <div className="profile-story rich-text" dangerouslySetInnerHTML={{ __html: storyHtml }} />}
+                                {sections.length === 0 && founderNote}
+                            </div>
+                            {collection && (
+                                <Link href={collection.url} className="profile-photo group block overflow-hidden rounded-xl border border-stone-200">
+                                    <Img image={collection.image} alt="" sizes="(min-width: 960px) 28vw, 90vw" className="aspect-[2.5] w-full object-cover md:aspect-square" />
+                                    <span className="flex items-center justify-between gap-3 px-4 py-3 text-sm font-semibold sm:px-5">
+                                        <span className="group-hover:underline">Explore {collection.name}</span>
+                                        <ArrowUpRight size={17} aria-hidden />
+                                    </span>
+                                </Link>
+                            )}
+                        </section>
+                    )}
+
+                    {sections.length > 0 && (
+                        <section id="offer-and-promise" aria-label="What we offer and our promise" className="border-y border-stone-200 py-6 sm:py-8">
+                            <div className={`grid gap-5 md:gap-12 ${sections.length > 1 ? 'md:grid-cols-2' : ''}`}>
+                                {sections.map((html, index) => (
+                                    <div key={index} className="rich-text min-w-0 [&>h2:first-child]:mt-0 [&>h2:first-child]:mb-3 [&>:last-child]:mb-0"
+                                        dangerouslySetInnerHTML={{ __html: html }} />
+                                ))}
+                            </div>
+                            {founderNote}
+                        </section>
+                    )}
+
+                    {values && (
+                        <section id="values" aria-labelledby="values-heading">
+                            <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-2">
+                                <h2 id="values-heading" className="profile-heading">{values.heading}</h2>
+                                {values.subheading && <p className="max-w-md text-sm leading-relaxed text-stone-600">{values.subheading}</p>}
+                            </div>
+                            <dl className="profile-values">
+                                {values.items.map((item, index) => {
+                                    const Icon = WHY_ICONS[item.icon] || BadgeCheck;
+                                    return (
+                                        <div key={index} className="rounded-xl border border-stone-200 p-4 sm:p-5">
+                                            <dt className="flex items-center gap-3 font-semibold md:block">
+                                                <Icon size={21} className="shrink-0 md:mb-4" strokeWidth={1.6} aria-hidden />{item.title}
+                                            </dt>
+                                            {item.text && <dd className="mt-2 text-sm leading-relaxed text-stone-600">{item.text}</dd>}
+                                        </div>
+                                    );
+                                })}
+                            </dl>
+                        </section>
+                    )}
+
+                    <section id="contact" aria-labelledby="contact-heading" className="profile-contact">
                         <div>
-                            <h2 className="text-3xl font-extrabold tracking-tight text-balance">We'd love to hear from you</h2>
-                            <p className="mt-3 max-w-md opacity-80">Questions about a product, delivery or anything else? Send us a message and a real person will get back to you.</p>
-                            <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-                                <WhatsAppButton className="h-12 px-6">Chat on WhatsApp</WhatsAppButton>
-                                <Link href="/contact" className="btn h-12 border border-white/25 px-6 hover:bg-white/10">
-                                    Contact details
+                            <h2 id="contact-heading" className="profile-heading">Get in touch</h2>
+                            <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2">
+                                <WhatsAppButton />
+                                <Link href="/products" className="inline-flex min-h-11 items-center gap-1 text-sm font-semibold hover:underline">
+                                    Browse products <ArrowUpRight size={15} aria-hidden />
                                 </Link>
                             </div>
                         </div>
-                        {hasContact && (
-                            <div className="grid gap-5 sm:grid-cols-2">
-                                {contact.phone && (
-                                    <ContactItem icon={Phone} label="Call us">
-                                        <a href={`tel:${contact.phone.replace(/[^\d+]/g, '')}`} className="hover:underline">
-                                            {contact.phone}
-                                        </a>
-                                    </ContactItem>
-                                )}
-                                {contact.email && (
-                                    <ContactItem icon={Mail} label="Email">
-                                        <a href={`mailto:${contact.email}`} className="break-all hover:underline">
-                                            {contact.email}
-                                        </a>
-                                    </ContactItem>
-                                )}
-                                {contact.address && (
-                                    <ContactItem icon={MapPin} label="Visit us">
-                                        {contact.address}
-                                    </ContactItem>
-                                )}
-                                {contact.opening_hours && (
-                                    <ContactItem icon={Clock} label="Opening hours">
-                                        {contact.opening_hours}
-                                    </ContactItem>
-                                )}
-                            </div>
+                        {details.length > 0 && (
+                            <dl className="grid min-w-0 gap-x-6 gap-y-4 rounded-xl border border-stone-200 bg-white p-5 sm:grid-cols-2">
+                                {details.map(([label, Icon, value, href]) => (
+                                    <div key={label} className="min-w-0">
+                                        <dt className="flex items-center gap-2 text-sm font-semibold"><Icon size={16} aria-hidden />{label}</dt>
+                                        <dd className="mt-1 whitespace-pre-line text-sm leading-relaxed text-stone-700">
+                                            {href ? <a className="underline decoration-stone-300 underline-offset-4 hover:decoration-current" href={href}>{value}</a> : value}
+                                        </dd>
+                                    </div>
+                                ))}
+                            </dl>
                         )}
-                    </div>
+                    </section>
                 </div>
-            </section>
+            </article>
         </StoreLayout>
     );
 }

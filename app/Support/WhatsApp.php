@@ -9,18 +9,47 @@ use App\Models\Product;
 /** Builds standard WhatsApp click-to-chat links (https://wa.me/...). */
 class WhatsApp
 {
+    /** Country calling codes, to turn local numbers ("0801…") into international ones. */
+    public const CALLING_CODES = [
+        'NG' => '234', 'GH' => '233', 'KE' => '254', 'ZA' => '27', 'UG' => '256', 'TZ' => '255', 'RW' => '250',
+        'CM' => '237', 'SN' => '221', 'CI' => '225', 'BJ' => '229', 'TG' => '228', 'ZM' => '260', 'ZW' => '263',
+        'EG' => '20', 'MA' => '212', 'ET' => '251', 'GB' => '44', 'IE' => '353', 'FR' => '33', 'DE' => '49',
+        'NL' => '31', 'IT' => '39', 'ES' => '34', 'AE' => '971', 'SA' => '966', 'IN' => '91', 'PK' => '92',
+        'AU' => '61', 'NZ' => '64', 'US' => '1', 'CA' => '1',
+    ];
+
     /**
      * Normalise a phone number to the international digits-only format wa.me
-     * expects, e.g. "+234 (801) 234-5678" -> "2348012345678".
+     * expects, e.g. "+234 (801) 234-5678" -> "2348012345678". With a country,
+     * a local number is converted too ("0801 234 5678" + NG -> "2348012345678").
      */
-    public static function normalize(?string $number): ?string
+    public static function normalize(?string $number, ?string $country = null): ?string
     {
-        $digits = preg_replace('/\D+/', '', (string) $number);
+        $raw = trim((string) $number);
+        $digits = preg_replace('/\D+/', '', $raw);
         if (str_starts_with($digits, '00')) {
             $digits = substr($digits, 2);
+        } elseif ($country && ! str_starts_with($raw, '+') && ($code = self::CALLING_CODES[strtoupper($country)] ?? null)) {
+            if (str_starts_with($digits, '0')) {
+                $digits = $code.substr($digits, 1);
+            } elseif ($code === '1' && strlen($digits) === 10) {
+                $digits = '1'.$digits;
+            }
         }
 
         return self::isValid($digits) ? $digits : null;
+    }
+
+    /** Link to chat with a customer (not the business). */
+    public static function chatLink(?string $number, ?string $country = null, ?string $message = null): ?string
+    {
+        $digits = self::normalize($number, $country ?: BusinessSetting::current()->default_country);
+        if (! $digits) {
+            return null;
+        }
+        $message = trim((string) $message);
+
+        return 'https://wa.me/'.$digits.($message === '' ? '' : '?text='.rawurlencode($message));
     }
 
     /** International format: country code + number, 8 to 15 digits, no leading zero. */
@@ -96,6 +125,9 @@ class WhatsApp
         $lines[] = '';
         $lines[] = 'Name: '.$order->customer_name;
         $lines[] = 'Phone: '.$order->customer_phone;
+        if ($order->customer_whatsapp && $order->customer_whatsapp !== $order->customer_phone) {
+            $lines[] = 'WhatsApp: '.$order->customer_whatsapp;
+        }
         $lines[] = $order->isPickup()
             ? 'I will pick up my order'.($order->address ? " from {$order->address}." : '.')
             : 'Deliver to: '.$order->addressLine();

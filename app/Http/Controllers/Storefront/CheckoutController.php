@@ -94,6 +94,9 @@ class CheckoutController extends StorefrontController
         $data = $request->validate([
             'customer_name' => ['required', 'string', 'max:120'],
             'customer_phone' => ['required', 'string', 'max:40', 'regex:/^\+?[0-9()\-\s.]{7,40}$/'],
+            // Ticked "same as my phone number" (the default) or a separate WhatsApp number.
+            'whatsapp_same' => ['nullable', 'boolean'],
+            'customer_whatsapp' => [Rule::requiredIf(! $request->boolean('whatsapp_same', true)), 'nullable', 'string', 'max:40', 'regex:/^\+?[0-9()\-\s.]{7,40}$/'],
             'customer_email' => ['nullable', 'email', 'max:160'],
             'country' => ['required', Rule::in(array_keys($countries))],
             'state' => $states !== [] ? ['required', Rule::in(array_keys($states))] : ['nullable', 'string', 'max:80'],
@@ -105,6 +108,8 @@ class CheckoutController extends StorefrontController
             'payment_method' => ['required', Rule::in(array_keys($s->paymentMethods()))],
         ], [
             'customer_phone.regex' => 'Enter a valid phone number.',
+            'customer_whatsapp.required' => 'Enter your WhatsApp number, or tick “Same as my phone number”.',
+            'customer_whatsapp.regex' => 'Enter a valid WhatsApp number.',
             'country.in' => 'We don’t deliver to this country.',
             'state.required' => 'Choose your state.',
             'address.required' => 'Enter your street address.',
@@ -153,6 +158,7 @@ class CheckoutController extends StorefrontController
             $order = Order::query()->create([
                 'customer_name' => $data['customer_name'],
                 'customer_phone' => $data['customer_phone'],
+                'customer_whatsapp' => ($data['whatsapp_same'] ?? true) || blank($data['customer_whatsapp'] ?? null) ? $data['customer_phone'] : $data['customer_whatsapp'],
                 'customer_email' => $data['customer_email'] ?? null,
                 'fulfilment' => $pickup ? 'pickup' : 'delivery',
                 'shipping_country' => $data['country'],

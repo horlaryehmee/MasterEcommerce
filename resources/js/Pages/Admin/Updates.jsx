@@ -3,6 +3,7 @@ import { AlertTriangle, CheckCircle2, Circle, Download, ExternalLink, History, L
 import { useState } from 'react';
 import { Badge, Button, Card, ConfirmModal, FormActions, Modal, PageHeader, TextInput, Toggle } from '@/Components/Admin/ui';
 import AdminLayout from '@/Layouts/AdminLayout';
+import { xsrfCookieName } from '@/lib/csrf';
 
 const STEP_LABELS = {
     download: 'Downloading the update',
@@ -13,7 +14,9 @@ const STEP_LABELS = {
 };
 
 function xsrf() {
-    const m = document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]+)/);
+    // Letters, digits and dashes only, so safe in a pattern as is.
+    const name = xsrfCookieName();
+    const m = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]+)`));
     return m ? decodeURIComponent(m[1]) : '';
 }
 

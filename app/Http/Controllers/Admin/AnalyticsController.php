@@ -64,15 +64,41 @@ class AnalyticsController extends Controller
         return Inertia::render('Admin/Analytics/Realtime', [...$this->shared(), 'realtime' => Report::realtime()]);
     }
 
-    public function visitors(Request $request): Response
+    protected function visitorFilters(Request $request): array
     {
-        $r = $this->report($request);
-        $filters = [
+        return [
             'country' => preg_match('/^[A-Z]{2}$/', (string) $request->query('country')) ? $request->query('country') : '',
             'channel' => in_array($request->query('channel'), Channel::CHANNELS, true) ? $request->query('channel') : '',
             'search' => trim(mb_substr((string) $request->query('search', ''), 0, 60)),
+            'per_page' => \App\Support\AdminList::perPage($request),
         ];
+    }
 
+    public function visitorsExport(Request $request): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        $r = $this->report($request);
+        $query = $this->visitorsQuery($r, $this->visitorFilters($request));
+
+        $rows = (function () use ($query) {
+            foreach ($query->cursor() as $v) {
+                $row = $this->visitorRow($v);
+                yield [
+                    $row['name'], $row['country_name'], $v->region, $v->city, $v->device, $v->browser, $v->os,
+                    $v->first_channel, $v->first_source,
+                    \App\Support\AdminList::localDate($v->first_seen_at), \App\Support\AdminList::localDate($v->last_seen_at),
+                    $row['sessions'], $row['pageviews'], $row['orders'], \App\Support\CsvExport::amount($v->revenue ?? 0),
+                ];
+            }
+        })();
+        $code = BusinessSetting::current()->currency_code;
+
+        return \App\Support\CsvExport::download('visitors', [
+            'Visitor', 'Country', 'Region', 'City', 'Device', 'Browser', 'System', 'First came from', 'Source', 'First visit', 'Last visit', 'Visits', 'Page views', 'Orders', "Sales ({$code})",
+        ], $rows);
+    }
+
+    protected function visitorsQuery($r, array $filters)
+    {
         $orders = DB::table('orders')->where('status', '!=', 'cancelled')->whereNotNull('stats_visitor_id')
             ->selectRaw('stats_visitor_id, COUNT(*) as orders_count, SUM(total) as revenue')->groupBy('stats_visitor_id');
 
@@ -91,7 +117,15 @@ class AnalyticsController extends Controller
             ->orderByDesc('v.last_seen_at')
             ->select('v.*', DB::raw('COALESCE(o.orders_count, 0) as orders_count'), DB::raw('COALESCE(o.revenue, 0) as revenue'));
 
-        $visitors = $query->paginate(25)->withQueryString()->through(fn ($v) => $this->visitorRow($v));
+        return $query;
+    }
+
+    public function visitors(Request $request): Response
+    {
+        $r = $this->report($request);
+        $filters = $this->visitorFilters($request);
+
+        $visitors = $this->visitorsQuery($r, $filters)->paginate($filters['per_page'])->withQueryString()->through(fn ($v) => $this->visitorRow($v));
 
         return Inertia::render('Admin/Analytics/Visitors', [
             ...$this->shared(),

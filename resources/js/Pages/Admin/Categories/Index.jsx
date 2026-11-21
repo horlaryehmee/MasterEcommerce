@@ -1,7 +1,8 @@
 import { Link, useForm } from '@inertiajs/react';
 import { ExternalLink, FolderTree, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
-import { ActionMenu, AdminEmpty, Badge, Button, Modal, PageHeader } from '@/Components/Admin/ui';
+import { FilterSelect, ListToolbar, activeFilters, useList } from '@/Components/Admin/ListToolbar';
+import { ActionMenu, AdminEmpty, AdminPagination, Badge, Button, Modal, PageHeader } from '@/Components/Admin/ui';
 import AdminLayout from '@/Layouts/AdminLayout';
 
 function DeleteCategoryModal({ category, categories, onClose }) {
@@ -72,8 +73,11 @@ function DeleteCategoryModal({ category, categories, onClose }) {
     );
 }
 
-export default function CategoriesIndex({ categories }) {
+export default function CategoriesIndex({ categories, filters, visibilities, sorts, allCategories, total }) {
     const [deleting, setDeleting] = useState(null);
+    const list = useList('/admin/categories', filters, { sort: 'order', per_page: 25 });
+    const active = activeFilters(filters, { visibility: visibilities });
+    const filtered = filters.search || active.length > 0;
 
     return (
         <AdminLayout title="Categories">
@@ -84,20 +88,32 @@ export default function CategoriesIndex({ categories }) {
             />
 
             <div className="rounded-2xl border border-zinc-200 bg-white shadow-xs">
-                {categories.length === 0 ? (
+                {total > 0 && (
+                    <ListToolbar list={list} placeholder="Search categories…" sorts={sorts} exportUrl="/admin/categories/export" active={active}>
+                        <FilterSelect list={list} name="visibility" label="Show only" options={visibilities} placeholder="All categories" />
+                    </ListToolbar>
+                )}
+                {categories.data.length === 0 ? (
                     <AdminEmpty
                         icon={FolderTree}
-                        title="No categories yet"
-                        message="Create categories such as “Phones” or “Shoes” to organise your products."
+                        title={filtered ? 'No categories match' : 'No categories yet'}
+                        message={filtered ? 'Try a different search or clear the filters.' : 'Create categories such as “Phones” or “Shoes” to organise your products.'}
                         action={
-                            <Button href="/admin/categories/create">
-                                <Plus size={16} /> Add category
-                            </Button>
+                            filtered ? (
+                                <Button variant="secondary" type="button" onClick={list.clear}>
+                                    Clear filters
+                                </Button>
+                            ) : (
+                                <Button href="/admin/categories/create">
+                                    <Plus size={16} /> Add category
+                                </Button>
+                            )
                         }
                     />
                 ) : (
+                    <>
                     <ul className="divide-y divide-zinc-100">
-                        {categories.map((c) => (
+                        {categories.data.map((c) => (
                             <li key={c.id} className="relative flex items-center gap-3.5 py-3 pr-2 pl-3.5 transition active:bg-zinc-50 sm:gap-4 sm:p-4 sm:active:bg-transparent">
                                 <span className="h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-zinc-100 sm:h-14 sm:w-14">{c.image && <img src={c.image} alt="" className="h-full w-full object-cover" loading="lazy" />}</span>
                                 <div className="min-w-0 flex-1">
@@ -139,10 +155,12 @@ export default function CategoriesIndex({ categories }) {
                             </li>
                         ))}
                     </ul>
+                    <AdminPagination paginator={categories} list={list} />
+                    </>
                 )}
             </div>
 
-            <DeleteCategoryModal key={deleting?.id} category={deleting} categories={categories} onClose={() => setDeleting(null)} />
+            <DeleteCategoryModal key={deleting?.id} category={deleting} categories={allCategories} onClose={() => setDeleting(null)} />
         </AdminLayout>
     );
 }

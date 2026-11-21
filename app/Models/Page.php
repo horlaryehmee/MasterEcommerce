@@ -18,13 +18,14 @@ class Page extends Model
         'terms-and-conditions' => 'Terms and Conditions',
     ];
 
-    protected $fillable = ['slug', 'title', 'content', 'image_path', 'faq_items', 'is_published', 'seo_title', 'seo_description'];
+    protected $fillable = ['slug', 'title', 'content', 'image_path', 'faq_items', 'extras', 'is_published', 'seo_title', 'seo_description'];
 
     protected function casts(): array
     {
         return [
             'is_published' => 'boolean',
             'faq_items' => 'array',
+            'extras' => 'array',
         ];
     }
 

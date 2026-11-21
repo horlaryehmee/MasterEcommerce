@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Category;
 use App\Services\ImageStorage;
+use App\Support\AdminList;
+use App\Support\CsvExport;
 use App\Support\Media;
 use App\Support\Slug;
 use Illuminate\Http\RedirectResponse;
@@ -16,15 +18,54 @@ use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 use RuntimeException;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class CategoryController extends Controller
 {
     public function __construct(protected ImageStorage $images) {}
 
-    public function index(): Response
+    public const VISIBILITY = ['visible' => 'Visible', 'hidden' => 'Hidden', 'homepage' => 'On homepage', 'empty' => 'No products'];
+
+    public const SORTS = ['order' => 'Display order', 'name' => 'Name (A–Z)', 'products' => 'Most products'];
+
+    protected function filters(Request $request): array
     {
-        $categories = Category::query()->ordered()->withCount('products')->get()
-            ->map(fn (Category $c) => [
+        return [
+            'search' => AdminList::search($request),
+            'visibility' => AdminList::choice($request, 'visibility', self::VISIBILITY),
+            'sort' => AdminList::sort($request, self::SORTS),
+            'per_page' => AdminList::perPage($request),
+        ];
+    }
+
+    protected function listQuery(array $f)
+    {
+        $like = '%'.addcslashes($f['search'], '%_\\').'%';
+        $q = Category::query()->withCount('products')
+            ->when($f['search'] !== '', fn ($q) => $q->where(fn ($w) => $w->where('name', 'like', $like)->orWhere('slug', 'like', $like)->orWhere('description', 'like', $like)));
+
+        match ($f['visibility']) {
+            'visible' => $q->where('is_published', true),
+            'hidden' => $q->where('is_published', false),
+            'homepage' => $q->where('is_featured', true),
+            'empty' => $q->doesntHave('products'),
+            default => null,
+        };
+        match ($f['sort']) {
+            'name' => $q->orderBy('name')->orderBy('id'),
+            'products' => $q->orderByDesc('products_count')->orderBy('id'),
+            default => $q->ordered(),
+        };
+
+        return $q;
+    }
+
+    public function index(Request $request): Response
+    {
+        $filters = $this->filters($request);
+
+        $categories = $this->listQuery($filters)->paginate($filters['per_page'])->withQueryString()
+            ->through(fn (Category $c) => [
                 'id' => $c->id,
                 'name' => $c->name,
                 'slug' => $c->slug,
@@ -36,7 +77,28 @@ class CategoryController extends Controller
                 'products_count' => $c->products_count,
             ]);
 
-        return Inertia::render('Admin/Categories/Index', ['categories' => $categories]);
+        return Inertia::render('Admin/Categories/Index', [
+            'categories' => $categories,
+            'filters' => $filters,
+            'visibilities' => self::VISIBILITY,
+            'sorts' => self::SORTS,
+            // For "move the products to…" when deleting.
+            'allCategories' => Category::query()->ordered()->get(['id', 'name']),
+            'total' => Category::query()->count(),
+        ]);
+    }
+
+    public function export(Request $request): StreamedResponse
+    {
+        $query = $this->listQuery($this->filters($request));
+
+        $rows = (function () use ($query) {
+            foreach ($query->lazy(200) as $c) {
+                yield [$c->id, $c->name, $c->slug, $c->products_count, (bool) $c->is_published, (bool) $c->is_featured, $c->sort_order, route('categories.show', $c->slug)];
+            }
+        })();
+
+        return CsvExport::download('categories', ['ID', 'Name', 'Slug', 'Products', 'Visible', 'On homepage', 'Display order', 'Link'], $rows);
     }
 
     public function create(): Response

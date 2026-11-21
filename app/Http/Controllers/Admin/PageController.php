@@ -25,6 +25,8 @@ class PageController extends Controller
                 ...$page->only('id', 'slug', 'title', 'content', 'is_published', 'seo_title', 'seo_description'),
                 'url' => $page->url(),
                 'faq_items' => $page->faq_items ?? [],
+                'stats' => $page->extras['stats'] ?? [],
+                'quote' => ($page->extras['quote'] ?? []) + ['text' => '', 'name' => '', 'role' => ''],
                 'image_url' => Media::url($page->image_path, 'sm'),
             ],
             // Extra editors shown only where the page layout uses them.
@@ -57,13 +59,31 @@ class PageController extends Controller
             $rules += [
                 'image' => ['nullable', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:'.config('catalog.max_upload_kb'), 'dimensions:max_width=8000,max_height=8000'],
                 'remove_image' => ['nullable', 'boolean'],
+                // Headline numbers ("8+ years", "5,000+ customers") and a founder's note.
+                'stats' => ['nullable', 'array', 'max:4'],
+                'stats.*.value' => ['required', 'string', 'max:20'],
+                'stats.*.label' => ['required', 'string', 'max:60'],
+                'quote' => ['nullable', 'array'],
+                'quote.text' => ['nullable', 'string', 'max:600'],
+                'quote.name' => ['nullable', 'string', 'max:80'],
+                'quote.role' => ['nullable', 'string', 'max:80'],
             ];
         }
 
         $data = $request->validate($rules, [
             'faq_items.*.question.required' => 'Each question needs text.',
             'faq_items.*.answer.required' => 'Each question needs an answer.',
+            'stats.*.value.required' => 'Enter the number, e.g. 5,000+.',
+            'stats.*.label.required' => 'Say what it counts, e.g. Happy customers.',
         ]);
+
+        if ($page->slug === 'about') {
+            $data['extras'] = [
+                'stats' => collect($data['stats'] ?? [])->map(fn ($s) => ['value' => trim($s['value']), 'label' => trim($s['label'])])->values()->all(),
+                'quote' => collect($data['quote'] ?? [])->only('text', 'name', 'role')->map(fn ($v) => trim((string) $v))->all(),
+            ];
+            unset($data['stats'], $data['quote']);
+        }
 
         if ($page->slug === 'faq') {
             $data['faq_items'] = collect($data['faq_items'] ?? [])

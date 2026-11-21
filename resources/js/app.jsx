@@ -2,9 +2,14 @@ import '../css/app.css';
 import '@fontsource-variable/plus-jakarta-sans';
 
 import { createInertiaApp, router } from '@inertiajs/react';
+import axios from 'axios';
 import { createRoot } from 'react-dom/client';
+import { xsrfCookieName } from './lib/csrf';
 import { trackPageView } from './lib/analytics';
 import { statsPageview } from './lib/stats';
+
+// Inertia sends the CSRF token from this app's own cookie (see App\Http\Middleware\ValidateCsrfToken).
+axios.defaults.xsrfCookieName = xsrfCookieName();
 
 createInertiaApp({
     // The server already renders the full <title> (including the business name).

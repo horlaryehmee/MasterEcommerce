@@ -6,28 +6,28 @@ import SmartLink from '../SmartLink';
 import HeroSlider from './HeroSlider';
 import HeroSlideView from './HeroSlideView';
 
-export function CtaButton({ button, variant = 'primary' }) {
+export function CtaButton({ button }) {
     if (!button) return null;
     const isWhatsApp = button.link === 'whatsapp';
-    const cls = isWhatsApp ? 'btn-whatsapp h-12 px-6' : variant === 'primary' ? 'btn-primary h-12 px-6' : 'btn-outline h-12 px-6';
     return (
-        <SmartLink href={button.link} className={cls}>
+        <SmartLink href={button.link} className={isWhatsApp ? 'btn-whatsapp h-12 px-7' : 'btn-primary h-12 px-7'}>
             {isWhatsApp && <WhatsAppIcon size={18} />}
             {button.text}
-            {!isWhatsApp && variant === 'primary' && <ArrowRight size={17} />}
+            {!isWhatsApp && <ArrowRight size={17} />}
         </SmartLink>
     );
 }
 
-/** "Split" design: text beside an image (stacked on phones). */
-function SplitHero({ content, mobile }) {
+/** "Split" design: text beside an image (stacked and centred on phones). */
+function SplitHero({ content, mobile, vh }) {
     const image = mobile ? content.mobile_image || content.image : content.image;
     const hasImage = !!image;
+    const center = mobile || !hasImage;
 
     return (
         <section className="bg-surface text-on-surface">
-            <div className={`container-page grid items-center gap-10 py-12 sm:py-16 lg:gap-14 lg:py-20 ${hasImage ? 'md:grid-cols-2' : ''}`}>
-                <div className={hasImage ? '' : 'mx-auto max-w-3xl text-center'}>
+            <div className={`container-page grid items-center gap-8 py-10 sm:py-16 lg:gap-14 lg:py-20 ${hasImage ? 'md:grid-cols-2' : ''}`}>
+                <div className={center ? 'mx-auto max-w-3xl text-center' : ''}>
                     {content.eyebrow && (
                         <p className="inline-flex items-center gap-2 rounded-full bg-white/70 px-3 py-1 text-xs font-semibold tracking-wider text-stone-700 uppercase">
                             <span className="h-1.5 w-1.5 rounded-full bg-accent" aria-hidden />
@@ -35,16 +35,15 @@ function SplitHero({ content, mobile }) {
                         </p>
                     )}
                     <h1 className="mt-5 text-4xl leading-[1.08] font-extrabold tracking-tight text-balance text-stone-950 sm:text-5xl lg:text-6xl">{content.heading}</h1>
-                    {content.description && <p className="mt-5 max-w-xl text-base leading-relaxed text-stone-600 sm:text-lg">{content.description}</p>}
-                    {(content.primary || content.secondary) && (
-                        <div className={`mt-8 flex flex-col gap-3 sm:flex-row ${hasImage ? '' : 'justify-center'}`}>
+                    {content.description && <p className={`mt-5 max-w-xl text-base leading-relaxed text-stone-600 sm:text-lg ${center ? 'mx-auto' : ''}`}>{content.description}</p>}
+                    {content.primary && (
+                        <div className={`mt-8 flex ${center ? 'justify-center' : ''}`}>
                             <CtaButton button={content.primary} />
-                            <CtaButton button={content.secondary} variant="secondary" />
                         </div>
                     )}
                 </div>
                 {hasImage && (
-                    <div className="aspect-[4/3] overflow-hidden rounded-[2rem] bg-white/50">
+                    <div className={`overflow-hidden rounded-[2rem] bg-white/50 ${mobile ? 'order-first' : 'aspect-[4/3]'}`} style={mobile ? { height: `${Math.round(vh * 0.6)}svh`, minHeight: 200 } : undefined}>
                         <Img image={image} eager sizes="(min-width: 768px) 50vw, 100vw" className="h-full w-full object-cover" />
                     </div>
                 )}
@@ -73,7 +72,7 @@ export default function Hero({ hero }) {
 
     const device = isMobile ? 'mobile' : 'desktop';
     const type = hero[device];
-    const heights = { desktop: hero.slider.desktop_height, mobile: hero.slider.mobile_height };
+    const heights = { desktop: hero.slider.desktop_height, mobile: hero.slider.mobile_vh };
 
     if (type === 'slider' && hero.slides.length) {
         return (
@@ -97,11 +96,12 @@ export default function Hero({ hero }) {
                     roomForText
                     headingLevel="h1"
                     mobileText={hero.slider.mobile_text}
+                    mobileAlign={hero.slider.mobile_valign}
                     shade={hero.slider.shade}
                 />
             </Frame>
         );
     }
 
-    return <SplitHero content={hero.content} mobile={isMobile} />;
+    return <SplitHero content={hero.content} mobile={isMobile} vh={hero.slider.mobile_vh} />;
 }

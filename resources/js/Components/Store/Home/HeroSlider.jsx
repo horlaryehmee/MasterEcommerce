@@ -79,7 +79,7 @@ export default function HeroSlider({ slides, device, settings }) {
                             aria-hidden={i !== index}
                             inert={i !== index ? true : undefined}
                         >
-                            <HeroSlideView slide={slide} device={device} heights={{ desktop: settings.desktop_height, mobile: settings.mobile_height }} eager={i <= seen} roomForText={roomForText} headingLevel={i === 0 ? 'h1' : 'h2'} mobileText={settings.mobile_text} shade={settings.shade} />
+                            <HeroSlideView slide={slide} device={device} heights={{ desktop: settings.desktop_height, mobile: settings.mobile_vh }} eager={i <= seen} roomForText={roomForText} headingLevel={i === 0 ? 'h1' : 'h2'} mobileText={settings.mobile_text} mobileAlign={settings.mobile_valign} shade={settings.shade} />
                         </div>
                     ))}
                 </div>
@@ -110,7 +110,7 @@ export default function HeroSlider({ slides, device, settings }) {
 
                     {/* Dots sit left, centre or right (lined up with the slide text); dark dots on light slides. */}
                     <div className={`pointer-events-none absolute inset-x-0 bottom-4 sm:bottom-6 ${mobile ? 'px-5' : 'container-page'}`}>
-                        <div className={`flex items-center gap-3 ${DOTS_JUSTIFY[settings.dots] || DOTS_JUSTIFY.center} ${!mobile && settings.dots !== 'center' ? 'px-2 lg:px-6' : ''}`}>
+                        <div className={`flex items-center gap-3 ${mobile ? 'justify-center' : DOTS_JUSTIFY[settings.dots] || DOTS_JUSTIFY.center} ${!mobile && settings.dots !== 'center' ? 'px-2 lg:px-6' : ''}`}>
                             <div className="pointer-events-auto flex items-center gap-1.5">
                                 {slides.map((s, i) => (
                                     <button

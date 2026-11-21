@@ -1,6 +1,6 @@
 import { Link, router } from '@inertiajs/react';
-import { Laptop, Search, ShoppingBag, Smartphone, Tablet, Users } from 'lucide-react';
-import { useState } from 'react';
+import { Laptop, ShoppingBag, Smartphone, Tablet, Users } from 'lucide-react';
+import { FilterSelect, ListToolbar, activeFilters, useList } from '@/Components/Admin/ListToolbar';
 import { AnalyticsShell, Flag, fmt, GeoNote } from '@/Components/Admin/Analytics';
 import { AdminEmpty, AdminPagination, Badge } from '@/Components/Admin/ui';
 import AdminLayout from '@/Layouts/AdminLayout';
@@ -17,48 +17,18 @@ function Location({ v }) {
 }
 
 export default function Visitors({ periods, geo, summary, visitors, filters, countries, channels }) {
-    const [search, setSearch] = useState(filters.search);
-    const apply = (changes) => {
-        const params = { ...Object.fromEntries(new URLSearchParams(window.location.search)), ...changes, page: undefined };
-        Object.keys(params).forEach((k) => (params[k] === '' || params[k] === undefined) && delete params[k]);
-        router.get('/admin/analytics/visitors', params, { preserveState: true, preserveScroll: true, replace: true });
-    };
+    const list = useList('/admin/analytics/visitors', filters, { per_page: 25 }, ['period', 'from', 'to']);
+    const active = activeFilters(filters, { country: countries.map((c) => ({ value: c.code, label: c.name })), channel: (v) => `From ${v}` });
     const filtered = filters.country || filters.channel || filters.search;
 
     return (
         <AdminLayout title="Visitors">
             <AnalyticsShell title="Visitors" summary={summary} periods={periods}>
                 <div className="rounded-2xl border border-zinc-200 bg-white shadow-xs">
-                    <div className="flex flex-col gap-3 border-b border-zinc-100 p-4 md:flex-row">
-                        <form
-                            className="relative flex-1"
-                            onSubmit={(e) => {
-                                e.preventDefault();
-                                apply({ search });
-                            }}
-                        >
-                            <Search size={16} className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-zinc-400" />
-                            <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by city, order number or customer name…" className="input pl-9" aria-label="Search visitors" />
-                        </form>
-                        <div className="grid grid-cols-2 gap-3 md:flex">
-                            <select value={filters.country} onChange={(e) => apply({ country: e.target.value })} className="input md:w-48" aria-label="Filter by country">
-                                <option value="">All countries</option>
-                                {countries.map((c) => (
-                                    <option key={c.code} value={c.code}>
-                                        {c.name}
-                                    </option>
-                                ))}
-                            </select>
-                            <select value={filters.channel} onChange={(e) => apply({ channel: e.target.value })} className="input md:w-44" aria-label="Filter by first source">
-                                <option value="">All sources</option>
-                                {channels.map((c) => (
-                                    <option key={c} value={c}>
-                                        {c}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                    </div>
+                    <ListToolbar list={list} placeholder="Search by city, order number or customer name…" exportUrl="/admin/analytics/visitors/export" active={active}>
+                        <FilterSelect list={list} name="country" label="Country" options={countries.map((c) => ({ value: c.code, label: c.name }))} placeholder="All countries" />
+                        <FilterSelect list={list} name="channel" label="First came from" options={channels.map((c) => ({ value: c, label: c }))} placeholder="All sources" />
+                    </ListToolbar>
 
                     {visitors.data.length === 0 ? (
                         <AdminEmpty icon={Users} title={filtered ? 'No visitors match' : 'No visitors in this period'} message={filtered ? 'Try a different filter or period.' : 'Visitors appear here as soon as people browse your website.'} />
@@ -135,7 +105,7 @@ export default function Visitors({ periods, geo, summary, visitors, filters, cou
                                     </li>
                                 ))}
                             </ul>
-                            <AdminPagination paginator={visitors} />
+                            <AdminPagination paginator={visitors} list={list} />
                         </>
                     )}
                 </div>

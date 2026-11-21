@@ -10,7 +10,7 @@ import { formatMoney } from '@/lib/money';
 
 const PAYMENT_INFO = {
     whatsapp: { icon: WhatsAppIcon, text: 'Send your order to us on WhatsApp. We confirm it and agree payment with you there.' },
-    delivery: { icon: Banknote, text: 'Pay with cash or card when your order arrives.' },
+    delivery: { icon: Banknote, text: 'Pay with cash or bank transfer when your order arrives.' },
     bank_transfer: { icon: Landmark, text: 'Our account details are shown after you place the order.' },
 };
 
@@ -127,6 +127,8 @@ export default function Checkout({ items, subtotal, discount = 0, coupon, coupon
     const form = useForm({
         customer_name: '',
         customer_phone: '',
+        whatsapp_same: true,
+        customer_whatsapp: '',
         customer_email: '',
         country: defaultCountry,
         state: '',
@@ -196,6 +198,29 @@ export default function Checkout({ items, subtotal, discount = 0, coupon, coupon
                             <div className="grid gap-4 sm:grid-cols-2">
                                 <Input label="Phone number" type="tel" autoComplete="tel" inputMode="tel" required maxLength={40} placeholder="0801 234 5678" value={d.customer_phone} onChange={(e) => set('customer_phone', e.target.value)} error={err.customer_phone} />
                                 <Input label="Email" type="email" autoComplete="email" optional maxLength={160} placeholder="For your order confirmation" value={d.customer_email} onChange={(e) => set('customer_email', e.target.value)} error={err.customer_email} />
+                            </div>
+                            <div className="rounded-2xl bg-stone-50 p-4">
+                                <label className="flex cursor-pointer items-center gap-3 text-sm text-stone-800">
+                                    <input
+                                        type="checkbox"
+                                        checked={d.whatsapp_same}
+                                        onChange={(e) => {
+                                            set('whatsapp_same', e.target.checked);
+                                            if (form.errors.customer_whatsapp) form.clearErrors('customer_whatsapp');
+                                        }}
+                                        className="h-5 w-5 rounded border-stone-300 text-stone-900 focus:ring-stone-900"
+                                    />
+                                    <WhatsAppIcon size={18} className="shrink-0 text-whatsapp-dark" />
+                                    <span>
+                                        My WhatsApp number is the same as my phone number
+                                        <span className="block text-xs text-stone-500">So we can message you about your order.</span>
+                                    </span>
+                                </label>
+                                {!d.whatsapp_same && (
+                                    <div className="mt-4">
+                                        <Input label="WhatsApp number" type="tel" autoComplete="tel" inputMode="tel" required maxLength={40} placeholder="0801 234 5678" value={d.customer_whatsapp} onChange={(e) => set('customer_whatsapp', e.target.value)} error={err.customer_whatsapp} />
+                                    </div>
+                                )}
                             </div>
                         </Section>
 

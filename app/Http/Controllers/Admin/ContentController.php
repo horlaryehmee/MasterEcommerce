@@ -46,13 +46,16 @@ class ContentController extends Controller
                 ...$home->only([
                     'announcement_enabled', 'marquee_enabled', 'marquee_border', 'marquee_uppercase', 'hero_enabled', 'categories_enabled', 'featured_enabled',
                     'new_arrivals_enabled', 'promo_enabled', 'about_enabled', 'why_enabled', 'new_arrivals_count',
-                    'hero_autoplay', 'hero_interval',
+                    'hero_autoplay', 'hero_interval', 'hero_mobile_vh',
                 ]),
                 'why_items' => $home->why_items ?? [],
                 'marquee_items' => $home->marquee_items ?? [],
                 'hero_image_url' => Media::url($home->hero_image_path, 'sm'),
                 'hero_mobile_image_url' => Media::url($home->hero_mobile_image_path, 'sm'),
                 'promo_image_url' => Media::url($home->promo_image_path, 'sm'),
+                // For the date-time field: the end date in the store's timezone.
+                'promo_ends_local' => $home->promo_ends_at?->clone()->setTimezone(BusinessSetting::current()->timezone ?: config('app.timezone'))->format('Y-m-d\TH:i'),
+                'store_timezone' => BusinessSetting::current()->timezone ?: config('app.timezone'),
                 'about_image_url' => Media::url($home->about_image_path, 'sm'),
             ],
             'footer' => [
@@ -169,6 +172,14 @@ class ContentController extends Controller
                 ->values()->all();
         }
 
+        if ($section === 'promo') {
+            // Typed in the store's timezone; stored in UTC.
+            $data['promo_ends_at'] = filled($data['promo_ends_at'] ?? null)
+                ? \Illuminate\Support\Carbon::createFromFormat('Y-m-d\TH:i', $data['promo_ends_at'], BusinessSetting::current()->timezone ?: config('app.timezone'))->utc()
+                : null;
+            $data['promo_bg_color'] = Color::isHex($data['promo_bg_color'] ?? null) ? strtoupper($data['promo_bg_color']) : null;
+        }
+
         if ($section === 'marquee') {
             $data['marquee_items'] = collect($data['marquee_items'] ?? [])->map(fn ($t) => trim((string) $t))->filter()->values()->all();
             $data['marquee_separator'] = trim((string) ($data['marquee_separator'] ?? ''));
@@ -212,6 +223,8 @@ class ContentController extends Controller
                 'hero_mobile_height' => ['sometimes', 'required', Rule::in(array_keys(HomepageSetting::MOBILE_HEIGHTS))],
                 'hero_mobile_text' => ['sometimes', 'required', Rule::in(array_keys(HomepageSetting::MOBILE_TEXT))],
                 'hero_dots_position' => ['sometimes', 'required', Rule::in(array_keys(HomepageSetting::DOTS_POSITIONS))],
+                'hero_mobile_vh' => ['sometimes', 'required', 'integer', 'min:40', 'max:100'],
+                'hero_mobile_valign' => ['sometimes', 'required', Rule::in(['bottom', 'middle'])],
                 'hero_shade' => ['sometimes', 'required', Rule::in(array_keys(HomepageSetting::SHADES))],
                 'hero_eyebrow' => ['nullable', 'string', 'max:80'],
                 // The heading is needed only when a device uses the split or banner design.
@@ -270,6 +283,9 @@ class ContentController extends Controller
             'promo' => [
                 'promo_enabled' => ['boolean'],
                 'promo_eyebrow' => ['nullable', 'string', 'max:80'],
+                'promo_badge' => ['nullable', 'string', 'max:40'],
+                'promo_ends_at' => ['nullable', 'date_format:Y-m-d\TH:i'],
+                'promo_bg_color' => $hex,
                 'promo_heading' => ['nullable', 'required_if:promo_enabled,true', 'string', 'max:160'],
                 'promo_description' => ['nullable', 'string', 'max:500'],
                 'promo_button_text' => ['nullable', 'string', 'max:40'],

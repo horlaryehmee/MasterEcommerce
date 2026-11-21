@@ -38,6 +38,8 @@ class Themes
                 'categories' => 'cards',
                 'headings' => 'left',
                 'why' => 'cards',
+                // Homepage product sections on phones: a 2-column grid, or a swipeable row.
+                'products' => 'grid',
                 'home' => ['hero', 'marquee', 'categories', 'featured', 'promo', 'new_arrivals', 'why', 'about'],
             ],
             'style' => [
@@ -56,6 +58,8 @@ class Themes
                 'categories' => 'editorial',
                 'headings' => 'center',
                 'why' => 'strip',
+                // Homepage product sections on phones: a 2-column grid, or a swipeable row.
+                'products' => 'rail',
                 'home' => ['hero', 'marquee', 'categories', 'new_arrivals', 'promo', 'featured', 'about', 'why'],
             ],
             'style' => [
@@ -74,6 +78,8 @@ class Themes
                 'categories' => 'circles',
                 'headings' => 'center',
                 'why' => 'cards',
+                // Homepage product sections on phones: a 2-column grid, or a swipeable row.
+                'products' => 'rail',
                 'home' => ['hero', 'marquee', 'categories', 'featured', 'why', 'promo', 'new_arrivals', 'about'],
             ],
             'style' => [
@@ -92,6 +98,8 @@ class Themes
                 'categories' => 'tiles',
                 'headings' => 'left',
                 'why' => 'strip',
+                // Homepage product sections on phones: a 2-column grid, or a swipeable row.
+                'products' => 'rail',
                 'home' => ['hero', 'why', 'categories', 'featured', 'new_arrivals', 'promo', 'marquee', 'about'],
             ],
             'style' => [
@@ -110,6 +118,8 @@ class Themes
                 'categories' => 'arches',
                 'headings' => 'center',
                 'why' => 'cards',
+                // Homepage product sections on phones: a 2-column grid, or a swipeable row.
+                'products' => 'rail',
                 'home' => ['hero', 'marquee', 'categories', 'featured', 'promo', 'new_arrivals', 'why', 'about'],
             ],
             'style' => [

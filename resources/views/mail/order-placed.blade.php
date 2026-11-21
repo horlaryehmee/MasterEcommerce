@@ -38,8 +38,21 @@ Please transfer **{{ $detail['total'] }}** to:
 Use **#{{ $detail['number'] }}** as the payment reference.
 @endif
 
+@if (! $forOwner && $detail['payment_method'] === 'delivery')
+Pay **{{ $detail['total'] }}** with cash or bank transfer when your order {{ $detail['fulfilment'] === 'pickup' ? 'is ready' : 'arrives' }}.
+@if ($settings->bank_account_number)
+To pay by transfer, use:
+
+{{ $settings->bank_name }}<br>
+{{ $settings->bank_account_name }}<br>
+**{{ $settings->bank_account_number }}**
+
+Reference: **#{{ $detail['number'] }}**
+@endif
+@endif
+
 @if ($forOwner)
-**Customer:** {{ $detail['customer_name'] }} · {{ $detail['customer_phone'] }}{{ $detail['customer_email'] ? ' · '.$detail['customer_email'] : '' }}
+**Customer:** {{ $detail['customer_name'] }} · {{ $detail['customer_phone'] }}{{ $detail['customer_whatsapp'] && $detail['customer_whatsapp'] !== $detail['customer_phone'] ? ' · WhatsApp '.$detail['customer_whatsapp'] : '' }}{{ $detail['customer_email'] ? ' · '.$detail['customer_email'] : '' }}
 @endif
 
 @if ($detail['notes'])

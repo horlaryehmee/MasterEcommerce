@@ -1,8 +1,9 @@
 import { Link, router } from '@inertiajs/react';
-import { Copy, Pencil, Plus, Power, Search, TicketPercent, Trash2 } from 'lucide-react';
+import { Copy, Pencil, Plus, Power, TicketPercent, Trash2 } from 'lucide-react';
 import { useState } from 'react';
+import { FilterSelect, ListToolbar, activeFilters, useList } from '@/Components/Admin/ListToolbar';
 import { CouponStatusBadge } from '@/Components/Admin/OrderBadges';
-import { ActionMenu, AdminEmpty, Button, ConfirmModal, FilterChips, PageHeader } from '@/Components/Admin/ui';
+import { ActionMenu, AdminEmpty, AdminPagination, Button, ConfirmModal, FilterChips, PageHeader } from '@/Components/Admin/ui';
 import AdminLayout from '@/Layouts/AdminLayout';
 
 function usage(c) {
@@ -16,19 +17,16 @@ function dates(c) {
     return 'No expiry';
 }
 
-export default function CouponsIndex({ coupons, counts, statuses, filters }) {
-    const [search, setSearch] = useState(filters.search);
+export default function CouponsIndex({ coupons, counts, statuses, types, sorts, filters, total: allCoupons }) {
     const [deleting, setDeleting] = useState(null);
     const [processing, setProcessing] = useState(false);
     const [copied, setCopied] = useState(null);
 
-    const apply = (changes) => {
-        const params = { ...filters, ...changes };
-        Object.keys(params).forEach((k) => params[k] === '' && delete params[k]);
-        router.get('/admin/coupons', params, { preserveState: true, preserveScroll: true, replace: true });
-    };
+    const list = useList('/admin/coupons', filters, { sort: 'newest', per_page: 25 });
+    const apply = list.apply;
+    const active = activeFilters(filters, { type: types });
     const total = Object.values(counts).reduce((a, b) => a + Number(b), 0);
-    const filtered = filters.search || filters.status;
+    const filtered = filters.search || filters.status || active.length > 0;
     const tabs = [['', 'All', total], ...Object.entries(statuses).map(([k, l]) => [k, l, counts[k] ?? 0])];
 
     const toggle = (c) => router.patch(`/admin/coupons/${c.id}/toggle`, {}, { preserveScroll: true });
@@ -53,32 +51,25 @@ export default function CouponsIndex({ coupons, counts, statuses, filters }) {
             <PageHeader title="Coupons" description="Discount codes customers enter in the cart or at checkout. One coupon per order." fab={{ href: '/admin/coupons/create', label: 'Add coupon' }} />
 
             <div className="rounded-2xl border border-zinc-200 bg-white shadow-xs">
-                {total > 0 && (
+                {allCoupons > 0 && (
                     <>
                         <div className="border-b border-zinc-100 px-4 pt-4 pb-3">
                             <FilterChips label="Filter by status" value={filters.status} onChange={(key) => apply({ status: key })} options={tabs} />
                         </div>
-                        <form
-                            className="relative border-b border-zinc-100 p-4"
-                            onSubmit={(e) => {
-                                e.preventDefault();
-                                apply({ search });
-                            }}
-                        >
-                            <Search size={16} className="pointer-events-none absolute top-1/2 left-7 -translate-y-1/2 text-zinc-400" />
-                            <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search codes…" enterKeyHint="search" className="input pl-9" aria-label="Search coupons" />
-                        </form>
+                        <ListToolbar list={list} placeholder="Search codes or descriptions…" sorts={sorts} exportUrl="/admin/coupons/export" active={active}>
+                            <FilterSelect list={list} name="type" label="Discount type" options={types} placeholder="All types" />
+                        </ListToolbar>
                     </>
                 )}
 
-                {coupons.length === 0 ? (
+                {coupons.data.length === 0 ? (
                     <AdminEmpty
                         icon={TicketPercent}
                         title={filtered ? 'No coupons match' : 'No coupons yet'}
                         message={filtered ? 'Try a different search or status.' : 'Create a code such as “WELCOME10” for 10% off, a fixed amount off, or free shipping.'}
                         action={
                             filtered ? (
-                                <Button variant="secondary" href="/admin/coupons">
+                                <Button variant="secondary" type="button" onClick={list.clear}>
                                     Clear filters
                                 </Button>
                             ) : (
@@ -89,8 +80,9 @@ export default function CouponsIndex({ coupons, counts, statuses, filters }) {
                         }
                     />
                 ) : (
+                    <>
                     <ul className="divide-y divide-zinc-100">
-                        {coupons.map((c) => (
+                        {coupons.data.map((c) => (
                             <li key={c.id} className="relative flex items-center gap-3.5 py-3.5 pr-2 pl-4 transition active:bg-zinc-50 sm:gap-4 sm:p-4 sm:active:bg-transparent">
                                 <span className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-zinc-100 text-zinc-600 sm:flex">
                                     <TicketPercent size={20} />
@@ -146,6 +138,8 @@ export default function CouponsIndex({ coupons, counts, statuses, filters }) {
                             </li>
                         ))}
                     </ul>
+                    <AdminPagination paginator={coupons} list={list} />
+                    </>
                 )}
             </div>
 

@@ -49,6 +49,51 @@ function FaqEditor({ form }) {
     );
 }
 
+/** About page extras: up to four headline numbers and a founder's note. */
+function AboutExtras({ form }) {
+    const stats = form.data.stats;
+    const setStat = (i, key, value) => form.setData('stats', stats.map((s, j) => (j === i ? { ...s, [key]: value } : s)));
+    const quote = form.data.quote;
+    const setQuote = (key, value) => form.setData('quote', { ...quote, [key]: value });
+
+    return (
+        <>
+            <Card title="Headline numbers" description="Up to four short facts shown over the page photo, e.g. 8+ Years in business, 12,000+ Happy customers. Leave empty to hide.">
+                <div className="space-y-3">
+                    {stats.map((s, i) => (
+                        <div key={i} className="flex items-start gap-2">
+                            <div className="w-28 shrink-0 sm:w-32">
+                                <input className={`input ${form.errors[`stats.${i}.value`] ? 'input-error' : ''}`} value={s.value} maxLength={20} placeholder="12,000+" onChange={(e) => setStat(i, 'value', e.target.value)} aria-label={`Number ${i + 1}`} />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                                <input className={`input ${form.errors[`stats.${i}.label`] ? 'input-error' : ''}`} value={s.label} maxLength={60} placeholder="Happy customers" onChange={(e) => setStat(i, 'label', e.target.value)} aria-label={`What number ${i + 1} counts`} />
+                                {(form.errors[`stats.${i}.value`] || form.errors[`stats.${i}.label`]) && <p className="mt-1 text-xs font-medium text-red-600">{form.errors[`stats.${i}.value`] || form.errors[`stats.${i}.label`]}</p>}
+                            </div>
+                            <button type="button" onClick={() => form.setData('stats', stats.filter((_, j) => j !== i))} className="rounded-lg p-2.5 text-zinc-500 hover:bg-red-50 hover:text-red-600" aria-label="Remove">
+                                <Trash2 size={16} />
+                            </button>
+                        </div>
+                    ))}
+                    {stats.length < 4 && (
+                        <Button type="button" variant="secondary" onClick={() => form.setData('stats', [...stats, { value: '', label: '' }])}>
+                            <Plus size={16} /> Add a number
+                        </Button>
+                    )}
+                </div>
+            </Card>
+            <Card title="Founder’s note" description="A short, personal quote shown as a highlight. Leave empty to hide.">
+                <div className="space-y-5">
+                    <Textarea label="Quote" rows={3} maxLength={600} optional value={quote.text} onChange={(e) => setQuote('text', e.target.value)} error={form.errors['quote.text']} placeholder="We started with one promise…" />
+                    <div className="grid gap-5 sm:grid-cols-2">
+                        <TextInput label="Name" maxLength={80} optional value={quote.name} onChange={(e) => setQuote('name', e.target.value)} error={form.errors['quote.name']} />
+                        <TextInput label="Role" maxLength={80} optional placeholder="Founder" value={quote.role} onChange={(e) => setQuote('role', e.target.value)} error={form.errors['quote.role']} />
+                    </div>
+                </div>
+            </Card>
+        </>
+    );
+}
+
 export default function PageForm({ page, supportsImage, supportsFaq }) {
     const form = useForm({
         title: page.title ?? '',
@@ -57,6 +102,8 @@ export default function PageForm({ page, supportsImage, supportsFaq }) {
         seo_title: page.seo_title ?? '',
         seo_description: page.seo_description ?? '',
         faq_items: page.faq_items ?? [],
+        stats: page.stats ?? [],
+        quote: page.quote ?? { text: '', name: '', role: '' },
         image: null,
         remove_image: false,
     });
@@ -101,12 +148,13 @@ export default function PageForm({ page, supportsImage, supportsFaq }) {
                         </div>
                     </Card>
                     {supportsFaq && <FaqEditor form={form} />}
+                    {supportsImage && <AboutExtras form={form} />}
                 </div>
                 <div className="space-y-6">
                     {supportsImage && (
-                        <Card title="Page image" description="Shown beside the introduction. If empty, the homepage About image is used.">
+                        <Card title="Page image" description="A wide photo shown under the title (about 2400 × 1000 px). If empty, the homepage About image is used.">
                             <ImageField
-                                aspect="aspect-[6/5]"
+                                aspect="aspect-[21/9]"
                                 currentUrl={page.image_url}
                                 file={form.data.image}
                                 onFile={(f) => form.setData('image', f)}

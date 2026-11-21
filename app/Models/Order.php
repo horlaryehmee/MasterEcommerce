@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Services\Shipping;
 use App\Support\Media;
 use App\Support\Money;
+use App\Support\WhatsApp;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -63,6 +64,11 @@ class Order extends Model
         static::creating(function (Order $order) {
             $order->token ??= Str::random(40);
         });
+        static::saving(function (Order $order) {
+            if ($order->isDirty(['customer_phone', 'customer_email']) || ! $order->customer_key) {
+                $order->customer_key = self::customerKey($order->customer_phone, $order->customer_email);
+            }
+        });
         // Short, sequential, human-friendly order numbers: #1001, #1002, ...
         static::created(function (Order $order) {
             $order->forceFill(['number' => (string) (1000 + $order->id)])->saveQuietly();
@@ -77,6 +83,28 @@ class Order extends Model
     public function coupon(): BelongsTo
     {
         return $this->belongsTo(Coupon::class);
+    }
+
+    /**
+     * Groups a guest's orders into one customer. Phones match on their last 10
+     * digits, so "0801 234 5678" and "+234 801 234 5678" are the same person;
+     * without a usable phone, the email is used. URL-safe ("p8012345678").
+     */
+    public static function customerKey(?string $phone, ?string $email): ?string
+    {
+        $digits = preg_replace('/\D+/', '', (string) $phone);
+        if (strlen($digits) >= 7) {
+            return 'p'.substr($digits, -10);
+        }
+        $email = mb_strtolower(trim((string) $email));
+
+        return $email !== '' ? 'e'.substr(md5($email), 0, 24) : null;
+    }
+
+    /** wa.me link to message the customer (their WhatsApp number, else their phone). */
+    public function customerWhatsappLink(?string $message = null): ?string
+    {
+        return WhatsApp::chatLink($this->customer_whatsapp ?: $this->customer_phone, $this->shipping_country, $message);
     }
 
     public function hasDiscount(): bool
@@ -152,6 +180,7 @@ class Order extends Model
             'payment_status_label' => self::PAYMENT_STATUSES[$this->payment_status] ?? $this->payment_status,
             'customer_name' => $this->customer_name,
             'customer_phone' => $this->customer_phone,
+            'customer_whatsapp' => $this->customer_whatsapp,
             'customer_email' => $this->customer_email,
             'fulfilment' => $this->fulfilment,
             'fulfilment_label' => self::FULFILMENT[$this->fulfilment] ?? $this->fulfilment,

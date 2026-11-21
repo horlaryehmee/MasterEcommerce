@@ -22,6 +22,21 @@ class DemoBusinessSeeder extends Seeder
             return;
         }
 
+        // About page: sample headline numbers and a founder's note (client sites start without them).
+        \App\Models\Page::query()->where('slug', 'about')->whereNull('extras')->update(['extras' => json_encode([
+            'stats' => [
+                ['value' => '8+', 'label' => 'Years in business'],
+                ['value' => '12,000+', 'label' => 'Happy customers'],
+                ['value' => '24h', 'label' => 'Lagos delivery'],
+                ['value' => '4.9★', 'label' => 'Average rating'],
+            ],
+            'quote' => [
+                'text' => 'We started with one promise: sell only what we would happily buy ourselves, and answer every message like it came from a friend. That promise still guides every order.',
+                'name' => 'Ada Okafor',
+                'role' => 'Founder',
+            ],
+        ])]);
+
         $settings->update([
             'business_name' => self::NAME,
             'business_description' => 'Discover quality products, carefully selected to bring convenience, style and value to your everyday life.',

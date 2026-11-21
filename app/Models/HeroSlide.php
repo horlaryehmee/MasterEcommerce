@@ -62,7 +62,6 @@ class HeroSlide extends Model
             'heading' => $imageOnly ? null : $this->heading,
             'description' => $imageOnly ? null : $this->description,
             'primary' => $imageOnly ? null : $button($this->button_text, $this->button_link),
-            'secondary' => $imageOnly ? null : $button($this->secondary_text, $this->secondary_link),
             'position' => array_key_exists($this->text_position, self::POSITIONS) ? $this->text_position : 'left',
             'theme' => $this->text_theme === 'dark' ? 'dark' : 'light',
         ];

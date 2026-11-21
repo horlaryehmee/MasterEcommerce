@@ -24,6 +24,36 @@ function CopyButton({ text }) {
     );
 }
 
+function BankDetails({ bank, total }) {
+    return (
+        <dl className="mt-4 divide-y divide-stone-200 rounded-2xl bg-stone-50 text-sm">
+            {bank.name && (
+                <div className="flex justify-between gap-4 px-4 py-3">
+                    <dt className="text-stone-500">Bank</dt>
+                    <dd className="text-right font-medium text-stone-900">{bank.name}</dd>
+                </div>
+            )}
+            {bank.account_name && (
+                <div className="flex justify-between gap-4 px-4 py-3">
+                    <dt className="text-stone-500">Account name</dt>
+                    <dd className="text-right font-medium text-stone-900">{bank.account_name}</dd>
+                </div>
+            )}
+            <div className="flex items-center justify-between gap-4 px-4 py-3">
+                <dt className="text-stone-500">Account number</dt>
+                <dd className="flex items-center gap-3">
+                    <span className="text-lg font-bold tracking-wider text-stone-900 tabular-nums">{bank.account_number}</span>
+                    <CopyButton text={bank.account_number} />
+                </dd>
+            </div>
+            <div className="flex justify-between gap-4 px-4 py-3">
+                <dt className="text-stone-500">Amount</dt>
+                <dd className="font-bold text-stone-900">{total}</dd>
+            </div>
+        </dl>
+    );
+}
+
 /** What the customer should do next, per payment method. */
 function NextStep({ order, whatsappUrl, bank }) {
     if (order.payment_method === 'whatsapp') {
@@ -51,31 +81,7 @@ function NextStep({ order, whatsappUrl, bank }) {
                 <p className="mt-2 text-sm text-stone-600">
                     Transfer <strong className="text-stone-900">{order.total}</strong> to the account below. Use <strong className="text-stone-900">#{order.number}</strong> as the reference.
                 </p>
-                <dl className="mt-4 divide-y divide-stone-200 rounded-2xl bg-stone-50 text-sm">
-                    {bank.name && (
-                        <div className="flex justify-between gap-4 px-4 py-3">
-                            <dt className="text-stone-500">Bank</dt>
-                            <dd className="text-right font-medium text-stone-900">{bank.name}</dd>
-                        </div>
-                    )}
-                    {bank.account_name && (
-                        <div className="flex justify-between gap-4 px-4 py-3">
-                            <dt className="text-stone-500">Account name</dt>
-                            <dd className="text-right font-medium text-stone-900">{bank.account_name}</dd>
-                        </div>
-                    )}
-                    <div className="flex items-center justify-between gap-4 px-4 py-3">
-                        <dt className="text-stone-500">Account number</dt>
-                        <dd className="flex items-center gap-3">
-                            <span className="text-lg font-bold tracking-wider text-stone-900 tabular-nums">{bank.account_number}</span>
-                            <CopyButton text={bank.account_number} />
-                        </dd>
-                    </div>
-                    <div className="flex justify-between gap-4 px-4 py-3">
-                        <dt className="text-stone-500">Amount</dt>
-                        <dd className="font-bold text-stone-900">{order.total}</dd>
-                    </div>
-                </dl>
+                <BankDetails bank={bank} total={order.total} />
                 {whatsappUrl && (
                     <a href={whatsappUrl} target="_blank" rel="noopener noreferrer" className="btn-whatsapp mt-4 h-12 w-full sm:w-auto sm:px-6">
                         <WhatsAppIcon size={18} /> Send payment confirmation on WhatsApp
@@ -91,8 +97,14 @@ function NextStep({ order, whatsappUrl, bank }) {
                 <Banknote size={20} /> Pay on {order.fulfilment === 'pickup' ? 'pickup' : 'delivery'}
             </h2>
             <p className="mt-2 text-sm text-stone-600">
-                We will contact you on <strong className="text-stone-900">{order.customer_phone}</strong> to confirm your order. Pay <strong className="text-stone-900">{order.total}</strong> when you receive it.
+                We will contact you on <strong className="text-stone-900">{order.customer_whatsapp || order.customer_phone}</strong> to confirm your order. Pay <strong className="text-stone-900">{order.total}</strong> with cash or bank transfer when you receive it.
             </p>
+            {bank && (
+                <>
+                    <p className="mt-4 text-sm font-medium text-stone-900">Paying by transfer? Use these details when your order {order.fulfilment === 'pickup' ? 'is ready' : 'arrives'}, with <strong>#{order.number}</strong> as the reference.</p>
+                    <BankDetails bank={bank} total={order.total} />
+                </>
+            )}
             {whatsappUrl && (
                 <a href={whatsappUrl} target="_blank" rel="noopener noreferrer" className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-whatsapp-dark hover:underline">
                     <WhatsAppIcon size={17} /> Message us about this order

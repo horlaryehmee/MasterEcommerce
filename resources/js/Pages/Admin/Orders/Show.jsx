@@ -1,4 +1,4 @@
-import { router } from '@inertiajs/react';
+import { Link, router } from '@inertiajs/react';
 import { ExternalLink, MapPin, Phone, Truck } from 'lucide-react';
 import { useState } from 'react';
 import { WhatsAppIcon } from '@/Components/Icons';
@@ -33,7 +33,7 @@ function StatusPicker({ label, field, value, options, orderId }) {
     );
 }
 
-export default function OrderShow({ order, statuses, paymentStatuses, customerWhatsapp }) {
+export default function OrderShow({ order, statuses, paymentStatuses, customerWhatsapp, customer }) {
     const tel = order.customer_phone.replace(/[^\d+]/g, '');
 
     return (
@@ -117,6 +117,11 @@ export default function OrderShow({ order, statuses, paymentStatuses, customerWh
                     <Card title="Customer">
                         <p className="font-medium text-zinc-900">{order.customer_name}</p>
                         <p className="mt-1 text-sm text-zinc-600">{order.customer_phone}</p>
+                        {order.customer_whatsapp && order.customer_whatsapp !== order.customer_phone && (
+                            <p className="mt-0.5 flex items-center gap-1.5 text-sm text-zinc-600">
+                                <WhatsAppIcon size={14} className="text-emerald-600" /> {order.customer_whatsapp}
+                            </p>
+                        )}
                         {order.customer_email && (
                             <a href={`mailto:${order.customer_email}`} className="mt-0.5 block text-sm text-zinc-600 hover:underline">
                                 {order.customer_email}
@@ -131,11 +136,16 @@ export default function OrderShow({ order, statuses, paymentStatuses, customerWh
                                     <WhatsAppIcon size={15} /> WhatsApp
                                 </a>
                             ) : (
-                                <span className="flex items-center text-xs text-zinc-400" title="The number isn't in international format (e.g. +234…), so a WhatsApp link can't be made.">
+                                <span className="flex items-center text-xs text-zinc-400" title="This number can't be turned into a WhatsApp link. Check it's a full phone number.">
                                     No WhatsApp link
                                 </span>
                             )}
                         </div>
+                        {customer && (
+                            <Link href={customer.url} className="mt-3 block border-t border-zinc-100 pt-3 text-sm font-semibold text-zinc-900 hover:underline">
+                                {customer.orders_count > 1 ? `Returning customer · ${customer.orders_count} orders →` : 'View customer →'}
+                            </Link>
+                        )}
                     </Card>
 
                     <Card title={order.fulfilment === 'pickup' ? 'Pickup' : 'Delivery'}>

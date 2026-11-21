@@ -153,8 +153,7 @@ class SettingsAndContentTest extends TestCase
             'hero_heading' => 'Light up your home',
             'hero_primary_text' => 'Shop',
             'hero_primary_link' => '/products',
-            'hero_secondary_text' => 'Chat',
-            'hero_secondary_link' => 'whatsapp',
+            'hero_mobile_vh' => 60,
             'hero_image' => UploadedFile::fake()->image('hero.jpg', 2400, 1600),
         ])->assertSessionHasNoErrors();
 
@@ -162,7 +161,15 @@ class SettingsAndContentTest extends TestCase
         $this->assertSame('Light up your home', $home->hero_heading);
         Storage::disk('public')->assertExists($home->hero_image_path);
 
-        $this->get('/')->assertInertia(fn (Assert $p) => $p->where('hero.content.heading', 'Light up your home')->where('hero.content.secondary.link', 'whatsapp'));
+        // One button only, and the phone height chosen in the admin.
+        $this->get('/')->assertInertia(fn (Assert $p) => $p
+            ->where('hero.content.heading', 'Light up your home')
+            ->where('hero.content.primary.link', '/products')
+            ->missing('hero.content.secondary')
+            ->where('hero.slider.mobile_vh', 60));
+
+        $this->put('/admin/content/hero', ['hero_enabled' => '1', 'hero_heading' => 'Hi', 'hero_mobile_vh' => 20])->assertSessionHasErrors('hero_mobile_vh');
+        $this->put('/admin/content/hero', ['hero_enabled' => '1', 'hero_heading' => 'Hi', 'hero_mobile_vh' => 120])->assertSessionHasErrors('hero_mobile_vh');
     }
 
     public function test_unsafe_links_and_missing_headings_are_rejected(): void

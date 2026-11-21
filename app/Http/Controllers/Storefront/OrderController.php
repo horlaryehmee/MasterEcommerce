@@ -19,7 +19,8 @@ class OrderController extends StorefrontController
         return $this->page('Storefront/OrderConfirmation', [
             'order' => $order->toDetail(),
             'whatsappUrl' => WhatsApp::orderLink($order, $s),
-            'bank' => $order->payment_method === 'bank_transfer' && filled($s->bank_account_number) ? [
+            // Bank transfer: pay now. Pay on delivery: shown so the customer can transfer when the order arrives.
+            'bank' => in_array($order->payment_method, ['bank_transfer', 'delivery'], true) && filled($s->bank_account_number) ? [
                 'name' => $s->bank_name,
                 'account_name' => $s->bank_account_name,
                 'account_number' => $s->bank_account_number,

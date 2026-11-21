@@ -9,7 +9,10 @@ use App\Models\Coupon;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\ShippingMethod;
+use App\Support\AdminList;
+use App\Support\CsvExport;
 use App\Support\Money;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -17,31 +20,86 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class CouponController extends Controller
 {
+    public const SORTS = ['newest' => 'Newest first', 'most_used' => 'Most used', 'code' => 'Code (A–Z)', 'expiring' => 'Expiring soonest'];
+
+    protected function filters(Request $request): array
+    {
+        return [
+            'search' => AdminList::search($request),
+            'status' => AdminList::choice($request, 'status', Coupon::STATUSES),
+            'type' => AdminList::choice($request, 'type', Coupon::TYPES + ['free_shipping' => 1]),
+            'sort' => AdminList::sort($request, self::SORTS),
+            'per_page' => AdminList::perPage($request),
+        ];
+    }
+
+    /** Status depends on today's date and usage, so it is worked out here; shops have tens of coupons, not thousands. */
+    protected function listRows(array $f)
+    {
+        $q = Coupon::query()
+            ->search($f['search'])
+            ->when($f['type'] === 'free_shipping', fn ($q) => $q->where('free_shipping', true))
+            ->when($f['type'] && $f['type'] !== 'free_shipping', fn ($q) => $q->where('discount_type', $f['type']))
+            ->withCount(['orders as used' => fn ($q) => $q->where('status', '!=', 'cancelled')])
+            ->withSum(['orders as discount_given' => fn ($q) => $q->where('status', '!=', 'cancelled')], 'discount_total');
+
+        match ($f['sort']) {
+            'most_used' => $q->orderByDesc('used')->latest('id'),
+            'code' => $q->orderBy('code'),
+            'expiring' => $q->orderByRaw('expires_on IS NULL')->orderBy('expires_on')->latest('id'),
+            default => $q->latest()->latest('id'),
+        };
+
+        return $q->get()->map(fn (Coupon $c) => ['model' => $c, 'row' => $this->row($c)]);
+    }
+
     public function index(Request $request): Response
     {
-        $filters = [
-            'search' => trim(mb_substr((string) $request->query('search', ''), 0, 100)),
-            'status' => array_key_exists((string) $request->query('status'), Coupon::STATUSES) ? $request->query('status') : '',
-        ];
+        $filters = $this->filters($request);
+        $all = $this->listRows($filters);
+        $rows = ($filters['status'] ? $all->where('row.status', $filters['status']) : $all)->pluck('row')->values();
 
-        // Status depends on today's date and usage, so it is worked out here; shops have tens of coupons, not thousands.
-        $coupons = Coupon::query()
-            ->search($filters['search'])
-            ->withCount(['orders as used' => fn ($q) => $q->where('status', '!=', 'cancelled')])
-            ->withSum(['orders as discount_given' => fn ($q) => $q->where('status', '!=', 'cancelled')], 'discount_total')
-            ->latest()->latest('id')
-            ->get()
-            ->map(fn (Coupon $c) => $this->row($c));
+        $page = max(1, (int) $request->query('page', 1));
+        $coupons = new LengthAwarePaginator($rows->forPage($page, $filters['per_page'])->values(), $rows->count(), $filters['per_page'], $page, [
+            'path' => $request->url(),
+            'query' => $request->query(),
+        ]);
 
         return Inertia::render('Admin/Coupons/Index', [
-            'coupons' => $filters['status'] ? $coupons->where('status', $filters['status'])->values() : $coupons,
-            'counts' => $coupons->countBy('status'),
+            'coupons' => $coupons,
+            'counts' => $all->pluck('row')->countBy('status'),
             'statuses' => Coupon::STATUSES,
+            'types' => Coupon::TYPES + ['free_shipping' => 'Free shipping'],
+            'sorts' => self::SORTS,
             'filters' => $filters,
+            'total' => Coupon::query()->count(),
         ]);
+    }
+
+    public function export(Request $request): StreamedResponse
+    {
+        $filters = $this->filters($request);
+        $all = $this->listRows($filters);
+        $rows = ($filters['status'] ? $all->where('row.status', $filters['status']) : $all)->map(fn ($r) => [
+            $r['row']['code'],
+            $r['row']['description'],
+            $r['row']['offer'],
+            $r['row']['status_label'],
+            $r['model']->minimum_spend !== null ? CsvExport::amount($r['model']->minimum_spend) : '',
+            $r['model']->usage_limit ?? '',
+            $r['row']['used'],
+            CsvExport::amount($r['model']->discount_given ?? 0),
+            $r['model']->starts_on?->format('Y-m-d') ?? '',
+            $r['model']->expires_on?->format('Y-m-d') ?? '',
+            AdminList::localDate($r['model']->created_at),
+        ]);
+        $code = BusinessSetting::current()->currency_code;
+
+        return CsvExport::download('coupons', ['Code', 'Description', 'Offer', 'Status', "Minimum spend ({$code})", 'Usage limit', 'Times used', "Discount given ({$code})", 'Starts', 'Expires', 'Created'], $rows);
     }
 
     public function create(): Response

@@ -77,7 +77,6 @@ class HomeController extends StorefrontController
                 'image' => Media::image($h->hero_image_path, $h->hero_heading),
                 'mobile_image' => Media::image($h->hero_mobile_image_path, $h->hero_heading),
                 'primary' => $this->button($h->hero_primary_text, $h->hero_primary_link),
-                'secondary' => $this->button($h->hero_secondary_text, $h->hero_secondary_link),
                 'align' => $h->hero_text_align === 'center' ? 'center' : 'left',
             ] : null,
             'slides' => in_array('slider', [$desktop, $mobile], true) ? $slides : [],
@@ -87,6 +86,10 @@ class HomeController extends StorefrontController
                 'desktop_height' => array_key_exists($h->hero_desktop_height, HomepageSetting::DESKTOP_HEIGHTS) ? $h->hero_desktop_height : 'standard',
                 'mobile_height' => array_key_exists($h->hero_mobile_height, HomepageSetting::MOBILE_HEIGHTS) ? $h->hero_mobile_height : 'portrait',
                 'mobile_text' => $h->hero_mobile_text === 'overlay' ? 'overlay' : 'below',
+                // Phones: hero height as a share of the screen height.
+                'mobile_vh' => max(40, min(100, (int) ($h->hero_mobile_vh ?: 75))),
+                // Phones, text on the image: at the bottom or in the middle (always centred left to right).
+                'mobile_valign' => $h->hero_mobile_valign === 'middle' ? 'middle' : 'bottom',
                 'dots' => array_key_exists($h->hero_dots_position, HomepageSetting::DOTS_POSITIONS) ? $h->hero_dots_position : 'center',
                 'shade' => array_key_exists($h->hero_shade, HomepageSetting::SHADES) ? $h->hero_shade : 'strong',
             ],
@@ -177,12 +180,16 @@ class HomeController extends StorefrontController
 
     protected function promo(HomepageSetting $h): ?array
     {
-        if (! $h->promo_enabled || blank($h->promo_heading)) {
+        // An offer with an end date disappears by itself once it's over.
+        if (! $h->promo_enabled || blank($h->promo_heading) || $h->promo_ends_at?->isPast()) {
             return null;
         }
 
         return [
             'eyebrow' => $h->promo_eyebrow,
+            'badge' => $h->promo_badge,
+            'ends_at' => $h->promo_ends_at?->toIso8601String(),
+            'bg' => $h->promo_bg_color,
             'heading' => $h->promo_heading,
             'description' => $h->promo_description,
             'image' => Media::image($h->promo_image_path, $h->promo_heading),

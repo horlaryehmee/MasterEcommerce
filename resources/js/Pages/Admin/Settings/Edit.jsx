@@ -456,7 +456,7 @@ function Shop({ s, hasWhatsapp, mail }) {
             <Card title="Payment options" description="Shown to customers at checkout. Switch on at least one.">
                 <div className="space-y-5">
                     <Toggle label="Confirm on WhatsApp" description={hasWhatsapp ? 'The order is saved, then the customer sends it to you on WhatsApp so you can agree payment.' : 'Add your WhatsApp number in the WhatsApp tab to use this option.'} {...toggle('pay_whatsapp_enabled')} />
-                    <Toggle label="Pay on delivery" description="The customer pays cash or card when the order arrives (or on pickup)." {...toggle('pay_on_delivery_enabled')} />
+                    <Toggle label="Pay on delivery" description="The customer pays with cash or bank transfer when the order arrives (or on pickup). Your bank details below are shown to them so they can transfer." {...toggle('pay_on_delivery_enabled')} />
                     <Toggle label="Bank transfer" description="Your account details are shown after the order is placed and in the confirmation email. Mark the order as paid once the money arrives." {...toggle('pay_bank_transfer_enabled')} />
                     {d.pay_bank_transfer_enabled && (
                         <div className="grid gap-4 rounded-xl bg-zinc-50 p-4 sm:grid-cols-3">

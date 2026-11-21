@@ -16,6 +16,7 @@ import {
     ShoppingBag,
     TicketPercent,
     UserRound,
+    Users,
     X,
     XCircle,
 } from 'lucide-react';
@@ -26,6 +27,7 @@ const NAV = [
     { key: 'overview', label: 'Overview', short: 'Home', href: '/admin', icon: LayoutDashboard, exact: true },
     { key: 'analytics', label: 'Analytics', href: '/admin/analytics', icon: BarChart3, hint: 'Visitors, pages and sales' },
     { key: 'orders', label: 'Orders', href: '/admin/orders', icon: ShoppingBag, shopOnly: true },
+    { key: 'customers', label: 'Customers', href: '/admin/customers', icon: Users, shopOnly: true, hint: 'Who has ordered and how much' },
     { key: 'coupons', label: 'Coupons', href: '/admin/coupons', icon: TicketPercent, shopOnly: true, hint: 'Discount codes for your shop' },
     { key: 'products', label: 'Products', href: '/admin/products', icon: Package },
     { key: 'categories', label: 'Categories', href: '/admin/categories', icon: FolderTree, hint: 'Group your products' },

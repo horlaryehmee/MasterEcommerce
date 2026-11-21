@@ -330,9 +330,9 @@ class CouponTest extends TestCase
 
         $this->get('/admin/coupons')->assertInertia(fn (Assert $page) => $page
             ->component('Admin/Coupons/Index')
-            ->where('coupons.0.code', 'WELCOME10')
-            ->where('coupons.0.status', 'active')
-            ->where('coupons.0.offer', '10% off'));
+            ->where('coupons.data.0.code', 'WELCOME10')
+            ->where('coupons.data.0.status', 'active')
+            ->where('coupons.data.0.offer', '10% off'));
         $this->get("/admin/coupons/{$coupon->id}/edit")->assertOk()->assertInertia(fn (Assert $page) => $page->component('Admin/Coupons/Form')->where('coupon.used', 0));
 
         $this->put("/admin/coupons/{$coupon->id}", ['code' => 'WELCOME10', 'discount_type' => 'percent', 'amount' => 150])

@@ -9,6 +9,8 @@ use App\Models\Product;
 use App\Models\ProductImage;
 use App\Models\ProductVariant;
 use App\Services\ImageStorage;
+use App\Support\AdminList;
+use App\Support\CsvExport;
 use App\Support\Media;
 use App\Support\Money;
 use App\Support\Slug;
@@ -20,29 +22,73 @@ use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 use RuntimeException;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ProductController extends Controller
 {
     public function __construct(protected ImageStorage $images) {}
 
+    public const SORTS = [
+        'updated' => 'Recently updated',
+        'newest' => 'Newest first',
+        'name' => 'Name (A–Z)',
+        'price_asc' => 'Price (lowest)',
+        'price_desc' => 'Price (highest)',
+    ];
+
+    public const TAGS = ['featured' => 'Featured', 'new_arrival' => 'New arrival', 'on_sale' => 'On sale', 'variants' => 'Has options'];
+
+    protected function filters(Request $request): array
+    {
+        $category = (string) $request->query('category');
+
+        return [
+            'search' => AdminList::search($request),
+            'status' => AdminList::choice($request, 'status', Product::STATUSES),
+            'category' => ctype_digit($category) || $category === 'none' ? $category : '',
+            'availability' => AdminList::choice($request, 'availability', Product::AVAILABILITY),
+            // Old links used ?featured=1.
+            'tag' => $request->boolean('featured') ? 'featured' : AdminList::choice($request, 'tag', self::TAGS),
+            'sort' => AdminList::sort($request, self::SORTS),
+            'per_page' => AdminList::perPage($request),
+        ];
+    }
+
+    protected function listQuery(array $f)
+    {
+        $q = Product::query()
+            ->search($f['search'])
+            ->when($f['status'], fn ($q, $s) => $q->where('status', $s))
+            ->when($f['category'] === 'none', fn ($q) => $q->whereNull('category_id'))
+            ->when($f['category'] !== '' && $f['category'] !== 'none', fn ($q) => $q->where('category_id', (int) $f['category']))
+            ->when($f['availability'], fn ($q, $a) => $q->where('availability', $a));
+
+        match ($f['tag']) {
+            'featured' => $q->where('is_featured', true),
+            'new_arrival' => $q->where('is_new_arrival', true),
+            'on_sale' => $q->whereNotNull('compare_at_price')->whereColumn('compare_at_price', '>', 'price'),
+            'variants' => $q->where('has_variants', true),
+            default => null,
+        };
+        match ($f['sort']) {
+            'newest' => $q->latest()->latest('id'),
+            'name' => $q->orderBy('name')->orderBy('id'),
+            'price_asc' => $q->orderBy('price')->orderBy('id'),
+            'price_desc' => $q->orderByDesc('price')->orderBy('id'),
+            default => $q->latest('updated_at')->latest('id'),
+        };
+
+        return $q;
+    }
+
     public function index(Request $request): Response
     {
-        $filters = [
-            'search' => trim(mb_substr((string) $request->query('search', ''), 0, 100)),
-            'status' => in_array($request->query('status'), array_keys(Product::STATUSES), true) ? $request->query('status') : '',
-            'category' => ctype_digit((string) $request->query('category')) ? (int) $request->query('category') : '',
-            'featured' => $request->boolean('featured'),
-        ];
+        $filters = $this->filters($request);
 
-        $products = Product::query()
+        $products = $this->listQuery($filters)
             ->with(['primaryImage', 'category:id,name'])
             ->withCount('variants')
-            ->search($filters['search'])
-            ->when($filters['status'], fn ($q, $s) => $q->where('status', $s))
-            ->when($filters['category'], fn ($q, $c) => $q->where('category_id', $c))
-            ->when($filters['featured'], fn ($q) => $q->where('is_featured', true))
-            ->latest('updated_at')->latest('id')
-            ->paginate(15)
+            ->paginate($filters['per_page'])
             ->withQueryString()
             ->through(fn (Product $p) => [
                 'id' => $p->id,
@@ -66,7 +112,42 @@ class ProductController extends Controller
             'filters' => $filters,
             'categories' => Category::query()->ordered()->get(['id', 'name']),
             'statuses' => Product::STATUSES,
+            'availabilities' => Product::AVAILABILITY,
+            'tags' => self::TAGS,
+            'sorts' => self::SORTS,
         ]);
+    }
+
+    public function export(Request $request): StreamedResponse
+    {
+        $filters = $this->filters($request);
+        $code = \App\Models\BusinessSetting::current()->currency_code;
+        $query = $this->listQuery($filters)->with(['category:id,name', 'variants']);
+
+        $rows = (function () use ($query) {
+            foreach ($query->lazy(200) as $p) {
+                yield [
+                    $p->id,
+                    $p->name,
+                    $p->category?->name ?? '',
+                    Product::STATUSES[$p->status] ?? $p->status,
+                    CsvExport::amount($p->price),
+                    $p->has_variants && $p->price_max !== null ? CsvExport::amount($p->price_max) : '',
+                    $p->compare_at_price !== null ? CsvExport::amount($p->compare_at_price) : '',
+                    Product::AVAILABILITY[$p->availability] ?? $p->availability,
+                    (bool) $p->is_featured,
+                    (bool) $p->is_new_arrival,
+                    $p->has_variants ? $p->variants->count() : 0,
+                    $p->variants->pluck('sku')->filter()->implode('; '),
+                    $p->url(),
+                    AdminList::localDate($p->updated_at),
+                ];
+            }
+        })();
+
+        return CsvExport::download('products', [
+            'ID', 'Name', 'Category', 'Status', "Price ({$code})", "Highest option price ({$code})", "Compare-at price ({$code})", 'Availability', 'Featured', 'New arrival', 'Options', 'SKUs', 'Link', 'Last updated',
+        ], $rows);
     }
 
     public function create(): Response

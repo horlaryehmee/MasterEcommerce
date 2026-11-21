@@ -45,7 +45,7 @@ class AboutAndFaqPagesTest extends TestCase
             ->where('page.content_html', fn ($h) => str_contains($h, 'Ada Lighting') && str_contains($h, '<h2>Our story</h2>'))
             ->where('values.heading', 'Our values')
             ->has('values.items', 1)
-            ->has('categories', 4)
+            ->has('categories', 5) // the collections mosaic: one large tile and four small
             ->where('contact.phone', '+234 801 000 0000'));
     }
 

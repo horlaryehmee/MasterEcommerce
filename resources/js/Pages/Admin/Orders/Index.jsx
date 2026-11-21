@@ -1,19 +1,23 @@
 import { Link, router } from '@inertiajs/react';
-import { Search, ShoppingBag } from 'lucide-react';
-import { useState } from 'react';
+import { ShoppingBag } from 'lucide-react';
+import { FilterDates, FilterSelect, ListToolbar, activeFilters, useList } from '@/Components/Admin/ListToolbar';
 import { OrderStatusBadge, PaymentStatusBadge } from '@/Components/Admin/OrderBadges';
 import { AdminEmpty, AdminPagination, Button, FilterChips, PageHeader } from '@/Components/Admin/ui';
 import AdminLayout from '@/Layouts/AdminLayout';
 
-export default function OrdersIndex({ orders, filters, statuses, counts }) {
-    const [search, setSearch] = useState(filters.search);
-    const apply = (changes) => {
-        const params = { ...filters, ...changes };
-        Object.keys(params).forEach((k) => params[k] === '' && delete params[k]);
-        router.get('/admin/orders', params, { preserveState: true, preserveScroll: true, replace: true });
-    };
+export default function OrdersIndex({ orders, filters, statuses, paymentStatuses, paymentMethods, fulfilments, sorts, counts, customerName }) {
+    const list = useList('/admin/orders', filters, { sort: 'newest', per_page: 25 });
+    const apply = list.apply;
+    const active = activeFilters(filters, {
+        customer: () => `Customer: ${customerName || 'unknown'}`,
+        payment_status: paymentStatuses,
+        payment_method: paymentMethods,
+        fulfilment: fulfilments,
+        from: (v) => `From ${v}`,
+        to: (v) => `Until ${v}`,
+    });
     const total = Object.values(counts).reduce((a, b) => a + Number(b), 0);
-    const filtered = filters.search || filters.status;
+    const filtered = filters.search || filters.status || active.length > 0;
     const tabs = [['', 'All', total], ...Object.entries(statuses).map(([k, l]) => [k, l, counts[k] ?? 0])];
 
     return (
@@ -24,16 +28,12 @@ export default function OrdersIndex({ orders, filters, statuses, counts }) {
                 <div className="border-b border-zinc-100 px-4 pt-4 pb-3">
                     <FilterChips label="Filter by status" value={filters.status} onChange={(key) => apply({ status: key })} options={tabs} />
                 </div>
-                <form
-                    className="relative border-b border-zinc-100 p-4"
-                    onSubmit={(e) => {
-                        e.preventDefault();
-                        apply({ search });
-                    }}
-                >
-                    <Search size={16} className="pointer-events-none absolute top-1/2 left-7 -translate-y-1/2 text-zinc-400" />
-                    <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Order number, name or phone…" enterKeyHint="search" className="input pl-9" aria-label="Search orders" />
-                </form>
+                <ListToolbar list={list} placeholder="Order number, name, phone, email or coupon…" sorts={sorts} exportUrl="/admin/orders/export" active={active}>
+                    <FilterSelect list={list} name="payment_status" label="Payment" options={paymentStatuses} />
+                    <FilterSelect list={list} name="payment_method" label="Payment method" options={paymentMethods} />
+                    <FilterSelect list={list} name="fulfilment" label="Delivery or pickup" options={fulfilments} />
+                    <FilterDates list={list} label="Placed between" />
+                </ListToolbar>
 
                 {orders.data.length === 0 ? (
                     <AdminEmpty
@@ -42,7 +42,7 @@ export default function OrdersIndex({ orders, filters, statuses, counts }) {
                         message={filtered ? 'Try a different search or status.' : 'When customers check out on your website, their orders appear here.'}
                         action={
                             filtered && (
-                                <Button variant="secondary" href="/admin/orders">
+                                <Button variant="secondary" type="button" onClick={list.clear}>
                                     Clear filters
                                 </Button>
                             )
@@ -122,7 +122,7 @@ export default function OrdersIndex({ orders, filters, statuses, counts }) {
                                 </li>
                             ))}
                         </ul>
-                        <AdminPagination paginator={orders} />
+                        <AdminPagination paginator={orders} list={list} />
                     </>
                 )}
             </div>

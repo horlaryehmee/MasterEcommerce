@@ -34,10 +34,13 @@ class PageController extends StorefrontController
         return match ($page->slug) {
             'about' => $this->about($page, $base, $settings, $seo),
             'faq' => $this->faq($page, $base, $settings, $seo),
+            'contact' => $this->page('Storefront/Contact', [
+                'page' => $base,
+                'contact' => $this->contact($settings),
+            ], $seo),
             default => $this->page('Storefront/Page', [
                 'page' => $base,
-                // The contact page also shows the business's contact details.
-                'contact' => $page->slug === 'contact' ? $this->contact($settings) : null,
+                'contact' => null,
             ], $seo),
         };
     }
@@ -52,10 +55,14 @@ class PageController extends StorefrontController
 
         $categories = Category::query()->published()->ordered()
             ->withCount(['products as published_products_count' => fn ($q) => $q->published()])
-            ->limit(4)->get();
+            ->limit(5)->get();
+
+        $stats = collect($page->extras['stats'] ?? [])->filter(fn ($s) => filled($s['value'] ?? null) && filled($s['label'] ?? null))->values();
+        $quote = $page->extras['quote'] ?? [];
 
         return $this->page('Storefront/About', [
             'page' => $base + [
+                'headline' => $this->fill($home->about_heading, $settings),
                 'intro' => $settings->business_description,
                 'image' => Media::image($imagePath, $page->title),
             ],
@@ -66,6 +73,12 @@ class PageController extends StorefrontController
             ],
             'categories' => $categories->map->toCard()->values(),
             'contact' => $this->contact($settings),
+            'stats' => $stats->all(),
+            'quote' => filled($quote['text'] ?? null) ? [
+                'text' => $this->fill($quote['text'], $settings),
+                'name' => $quote['name'] ?? null,
+                'role' => $quote['role'] ?? null,
+            ] : null,
         ], $seo->image(Media::url($imagePath)));
     }
 

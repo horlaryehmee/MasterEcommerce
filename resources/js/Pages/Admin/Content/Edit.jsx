@@ -232,6 +232,9 @@ function Promo({ home }) {
             initial={{
                 promo_enabled: home.promo_enabled,
                 promo_eyebrow: home.promo_eyebrow ?? '',
+                promo_badge: home.promo_badge ?? '',
+                promo_ends_at: home.promo_ends_local ?? '',
+                promo_bg_color: home.promo_bg_color ?? '',
                 promo_heading: home.promo_heading ?? '',
                 promo_description: home.promo_description ?? '',
                 promo_button_text: home.promo_button_text ?? '',
@@ -250,6 +253,25 @@ function Promo({ home }) {
                     <div className="grid gap-5 sm:grid-cols-2">
                         <TextInput label="Button text" maxLength={40} optional {...text(form, 'promo_button_text')} />
                         <TextInput label="Button link" help={LINK_HELP} optional {...text(form, 'promo_button_link')} />
+                    </div>
+                    <div className="grid gap-5 sm:grid-cols-2">
+                        <TextInput label="Sticker" maxLength={40} optional placeholder="e.g. Up to 30% off" help="A round badge on the photo. Keep it short." {...text(form, 'promo_badge')} />
+                        <div>
+                            <TextInput label="Offer ends" type="datetime-local" optional help={`Shows a countdown, and the banner hides itself when the time is up. Time zone: ${home.store_timezone}.`} {...text(form, 'promo_ends_at')} />
+                            {form.data.promo_ends_at && (
+                                <button type="button" onClick={() => form.setData('promo_ends_at', '')} className="mt-1 text-xs font-medium text-zinc-500 underline hover:text-zinc-900">
+                                    No end date
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                    <div>
+                        <ColorInput label="Background colour" value={form.data.promo_bg_color} onChange={(v) => form.setData('promo_bg_color', v)} error={form.errors.promo_bg_color} help={form.data.promo_bg_color ? 'Tip: match your photo’s background so they blend into one scene.' : 'Uses your brand’s soft colour. Tip: match your photo’s background so they blend.'} />
+                        {form.data.promo_bg_color && (
+                            <button type="button" onClick={() => form.setData('promo_bg_color', '')} className="mt-1 text-xs font-medium text-zinc-500 underline hover:text-zinc-900">
+                                Use brand colour
+                            </button>
+                        )}
                     </div>
                 </>
             )}
