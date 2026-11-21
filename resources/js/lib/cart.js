@@ -33,10 +33,10 @@ const KEEP = { preserveScroll: true, preserveState: true };
 /** Add a product. The server flashes `cart_added`, which opens the drawer. */
 export function useAddToCart() {
     const [busy, setBusy] = useState(null);
-    const add = (productId, { quantity = 1, checkout = false, onSuccess } = {}) =>
+    const add = (productId, { variantId = null, quantity = 1, checkout = false, onSuccess } = {}) =>
         router.post(
             '/cart',
-            { product_id: productId, quantity, checkout },
+            { product_id: productId, variant_id: variantId, quantity, checkout },
             {
                 ...KEEP,
                 // Going to checkout is a real page change.
@@ -49,6 +49,7 @@ export function useAddToCart() {
     return { add, busy };
 }
 
-export function updateCartItem(productId, quantity, options = {}) {
-    return quantity > 0 ? router.patch(`/cart/${productId}`, { quantity }, { ...KEEP, ...options }) : router.delete(`/cart/${productId}`, { ...KEEP, ...options });
+/** `line` is the cart line key: the product id, or "productId:variantId" for a variation. */
+export function updateCartItem(line, quantity, options = {}) {
+    return quantity > 0 ? router.patch(`/cart/${line}`, { quantity }, { ...KEEP, ...options }) : router.delete(`/cart/${line}`, { ...KEEP, ...options });
 }

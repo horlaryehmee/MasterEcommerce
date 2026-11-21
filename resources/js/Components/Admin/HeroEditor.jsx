@@ -286,6 +286,8 @@ export default function HeroEditor({ home, slides, options }) {
         hero_desktop_height: home.hero_desktop_height ?? 'standard',
         hero_mobile_height: home.hero_mobile_height ?? 'portrait',
         hero_mobile_text: home.hero_mobile_text ?? 'overlay',
+        hero_dots_position: home.hero_dots_position ?? 'center',
+        hero_shade: home.hero_shade ?? 'strong',
         hero_eyebrow: home.hero_eyebrow ?? '',
         hero_heading: home.hero_heading ?? '',
         hero_description: home.hero_description ?? '',
@@ -340,6 +342,13 @@ export default function HeroEditor({ home, slides, options }) {
                                         {...text('hero_mobile_text')}
                                     />
                                 )}
+                                <Select
+                                    className="sm:col-span-3"
+                                    label="Image shade"
+                                    help="Darkens (or, for dark text, lightens) the image behind the words so they stay readable. Choose None for photos with a plain area for the text."
+                                    options={Object.entries(options.shades).map(([value, label]) => ({ value, label }))}
+                                    {...text('hero_shade')}
+                                />
                             </div>
                         )}
 
@@ -347,6 +356,7 @@ export default function HeroEditor({ home, slides, options }) {
                             <div className="grid items-end gap-5 sm:grid-cols-2">
                                 <Toggle label="Play slides automatically" description="Pauses when a visitor hovers or taps the pause button." checked={d.hero_autoplay} onChange={(v) => form.setData('hero_autoplay', v)} />
                                 <Select label="Time per slide" disabled={!d.hero_autoplay} options={[4, 5, 6, 8, 10].map((n) => ({ value: n, label: `${n} seconds` }))} {...text('hero_interval')} />
+                                <Select label="Slide dots" help="Where the dots sit at the bottom of the slider. They turn dark on slides with dark text." options={Object.entries(options.dotsPositions).map(([value, label]) => ({ value, label }))} {...text('hero_dots_position')} />
                             </div>
                         )}
                     </div>

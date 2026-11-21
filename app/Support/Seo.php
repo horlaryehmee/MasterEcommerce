@@ -142,7 +142,18 @@ class Seo
             'image' => $images ?: null,
             'url' => $product->url(),
             'category' => $product->category?->name,
-            'offers' => [
+            // Variations with different prices: a price range (Google shows "₦X – ₦Y").
+            'offers' => $product->hasPriceRange() ? [
+                '@type' => 'AggregateOffer',
+                'url' => $product->url(),
+                'priceCurrency' => $settings->currency_code,
+                'lowPrice' => number_format((float) $product->price, 2, '.', ''),
+                'highPrice' => number_format((float) $product->price_max, 2, '.', ''),
+                'offerCount' => $product->relationLoaded('variants') ? $product->variants->where('is_enabled', true)->count() : null,
+                'availability' => Product::SCHEMA_AVAILABILITY[$product->availability] ?? 'https://schema.org/InStock',
+                'itemCondition' => 'https://schema.org/NewCondition',
+                'seller' => ['@type' => 'Organization', 'name' => $settings->business_name],
+            ] : [
                 '@type' => 'Offer',
                 'url' => $product->url(),
                 'priceCurrency' => $settings->currency_code,

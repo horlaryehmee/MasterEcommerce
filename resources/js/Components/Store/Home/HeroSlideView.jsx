@@ -7,15 +7,28 @@ import SmartLink from '../SmartLink';
 export const DESKTOP_ASPECT = { slim: 'aspect-[3/1]', standard: 'aspect-[12/5]', tall: 'aspect-[2/1]' };
 export const MOBILE_ASPECT = { portrait: 'aspect-[4/5]', square: 'aspect-square', landscape: 'aspect-video' };
 
+// Shade behind the text, by strength (Website Content → Hero → Image shade). "none" draws nothing.
 const SHADE = {
-    desktop: {
-        light: { left: 'bg-gradient-to-r from-black/65 via-black/30 to-transparent', right: 'bg-gradient-to-l from-black/65 via-black/30 to-transparent', center: 'bg-black/40' },
-        dark: { left: 'bg-gradient-to-r from-white/85 via-white/45 to-transparent', right: 'bg-gradient-to-l from-white/85 via-white/45 to-transparent', center: 'bg-white/55' },
+    strong: {
+        desktop: {
+            light: { left: 'bg-gradient-to-r from-black/65 via-black/30 to-transparent', right: 'bg-gradient-to-l from-black/65 via-black/30 to-transparent', center: 'bg-black/40' },
+            dark: { left: 'bg-gradient-to-r from-white/85 via-white/45 to-transparent', right: 'bg-gradient-to-l from-white/85 via-white/45 to-transparent', center: 'bg-white/55' },
+        },
+        // Phones: a strong fade only over the lower part, so the product at the top stays clear.
+        mobile: {
+            light: 'bg-gradient-to-t from-black/95 via-black/75 via-45% to-transparent to-80%',
+            dark: 'bg-gradient-to-t from-white via-white/85 via-45% to-transparent to-80%',
+        },
     },
-    // Phones: a strong fade only over the lower part, so the product at the top stays clear.
-    mobile: {
-        light: 'bg-gradient-to-t from-black/95 via-black/75 via-45% to-transparent to-80%',
-        dark: 'bg-gradient-to-t from-white via-white/85 via-45% to-transparent to-80%',
+    soft: {
+        desktop: {
+            light: { left: 'bg-gradient-to-r from-black/40 via-black/15 to-transparent', right: 'bg-gradient-to-l from-black/40 via-black/15 to-transparent', center: 'bg-black/25' },
+            dark: { left: 'bg-gradient-to-r from-white/60 via-white/25 to-transparent', right: 'bg-gradient-to-l from-white/60 via-white/25 to-transparent', center: 'bg-white/35' },
+        },
+        mobile: {
+            light: 'bg-gradient-to-t from-black/70 via-black/35 via-40% to-transparent to-75%',
+            dark: 'bg-gradient-to-t from-white/85 via-white/45 via-40% to-transparent to-75%',
+        },
     },
 };
 
@@ -62,7 +75,7 @@ function SlideText({ slide, light, mobile, centered, alignRight, Heading }) {
  * On phones, text can sit below the image (the image stays fully visible)
  * or on top of it with a soft shade.
  */
-export default function HeroSlideView({ slide, device, heights, eager = false, roomForText = false, headingLevel = 'h2', mobileText = 'below' }) {
+export default function HeroSlideView({ slide, device, heights, eager = false, roomForText = false, headingLevel = 'h2', mobileText = 'below', shade = 'strong' }) {
     const mobile = device === 'mobile';
     const image = mobile ? slide.mobile_image || slide.image : slide.image;
     const aspect = mobile ? MOBILE_ASPECT[heights.mobile] : DESKTOP_ASPECT[heights.desktop];
@@ -102,7 +115,7 @@ export default function HeroSlideView({ slide, device, heights, eager = false, r
                 slide.link && <SmartLink href={slide.link} className="absolute inset-0" aria-label={slide.image?.alt || 'View offer'} />
             ) : (
                 <>
-                    <div className={`absolute inset-0 ${mobile ? SHADE.mobile[light ? 'light' : 'dark'] : SHADE.desktop[light ? 'light' : 'dark'][position]}`} aria-hidden />
+                    {SHADE[shade] && <div className={`absolute inset-0 ${mobile ? SHADE[shade].mobile[light ? 'light' : 'dark'] : SHADE[shade].desktop[light ? 'light' : 'dark'][position]}`} aria-hidden />}
                     <div className={`absolute inset-0 flex ${mobile ? 'items-end' : 'items-center'}`}>
                         <div className={`w-full ${mobile ? `px-5 pb-16 ${centered ? 'text-center' : ''}` :`container-page flex ${centered ? 'justify-center text-center' : position === 'right' ? 'justify-end text-right' : 'justify-start'}`}`}>
                             <div className={mobile ? '' : 'max-w-xl px-2 lg:px-6'}>

@@ -2,6 +2,8 @@ import { ChevronLeft, ChevronRight, Pause, Play } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import HeroSlideView from './HeroSlideView';
 
+const DOTS_JUSTIFY = { left: 'justify-start', center: 'justify-center', right: 'justify-end' };
+
 /**
  * Responsive banner slider: swipe on phones, arrows and keyboard on desktop,
  * dots everywhere. Autoplay pauses on hover, focus, or when the visitor prefers
@@ -40,6 +42,9 @@ export default function HeroSlider({ slides, device, settings }) {
 
     if (count === 0) return null;
     const roomForText = slides.some((s) => !s.image_only);
+    // Dots follow the current slide's text colour (dark text = light image). Text below the
+    // image on phones sits on a dark or light panel matching the same theme.
+    const dark = slides[index]?.theme === 'dark' && !slides[index]?.image_only;
 
     return (
         <section
@@ -74,7 +79,7 @@ export default function HeroSlider({ slides, device, settings }) {
                             aria-hidden={i !== index}
                             inert={i !== index ? true : undefined}
                         >
-                            <HeroSlideView slide={slide} device={device} heights={{ desktop: settings.desktop_height, mobile: settings.mobile_height }} eager={i <= seen} roomForText={roomForText} headingLevel={i === 0 ? 'h1' : 'h2'} mobileText={settings.mobile_text} />
+                            <HeroSlideView slide={slide} device={device} heights={{ desktop: settings.desktop_height, mobile: settings.mobile_height }} eager={i <= seen} roomForText={roomForText} headingLevel={i === 0 ? 'h1' : 'h2'} mobileText={settings.mobile_text} shade={settings.shade} />
                         </div>
                     ))}
                 </div>
@@ -103,29 +108,34 @@ export default function HeroSlider({ slides, device, settings }) {
                         </>
                     )}
 
-                    <div className="absolute inset-x-0 bottom-4 flex items-center justify-center gap-3 sm:bottom-5">
-                        <div className="flex items-center gap-1.5 rounded-full bg-black/25 px-2.5 py-1.5 backdrop-blur-sm">
-                            {slides.map((s, i) => (
+                    {/* Dots sit left, centre or right (lined up with the slide text); dark dots on light slides. */}
+                    <div className={`pointer-events-none absolute inset-x-0 bottom-4 sm:bottom-6 ${mobile ? 'px-5' : 'container-page'}`}>
+                        <div className={`flex items-center gap-3 ${DOTS_JUSTIFY[settings.dots] || DOTS_JUSTIFY.center} ${!mobile && settings.dots !== 'center' ? 'px-2 lg:px-6' : ''}`}>
+                            <div className="pointer-events-auto flex items-center gap-1.5">
+                                {slides.map((s, i) => (
+                                    <button
+                                        key={s.id}
+                                        type="button"
+                                        onClick={() => go(i)}
+                                        aria-label={`Go to slide ${i + 1}`}
+                                        aria-current={i === index ? 'true' : undefined}
+                                        className="group/dot flex h-6 items-center px-0.5"
+                                    >
+                                        <span className={`block h-2 rounded-full shadow-sm transition-all ${i === index ? `w-6 ${dark ? 'bg-stone-900' : 'bg-white'}` : `w-2 ${dark ? 'bg-stone-900/30 group-hover/dot:bg-stone-900/60' : 'bg-white/55 group-hover/dot:bg-white/80'}`}`} />
+                                    </button>
+                                ))}
+                            </div>
+                            {autoplay && (
                                 <button
-                                    key={s.id}
                                     type="button"
-                                    onClick={() => go(i)}
-                                    aria-label={`Go to slide ${i + 1}`}
-                                    aria-current={i === index ? 'true' : undefined}
-                                    className={`h-2 rounded-full transition-all ${i === index ? 'w-6 bg-white' : 'w-2 bg-white/55 hover:bg-white/80'}`}
-                                />
-                            ))}
+                                    onClick={() => setPaused((p) => !p)}
+                                    aria-label={paused ? 'Play slideshow' : 'Pause slideshow'}
+                                    className={`pointer-events-auto flex h-7 w-7 items-center justify-center rounded-full transition-colors ${dark ? 'text-stone-900 hover:bg-stone-900/10' : 'text-white hover:bg-white/15'}`}
+                                >
+                                    {paused ? <Play size={13} /> : <Pause size={13} />}
+                                </button>
+                            )}
                         </div>
-                        {autoplay && (
-                            <button
-                                type="button"
-                                onClick={() => setPaused((p) => !p)}
-                                aria-label={paused ? 'Play slideshow' : 'Pause slideshow'}
-                                className="flex h-7 w-7 items-center justify-center rounded-full bg-black/25 text-white backdrop-blur-sm hover:bg-black/40"
-                            >
-                                {paused ? <Play size={13} /> : <Pause size={13} />}
-                            </button>
-                        )}
                     </div>
                 </>
             )}

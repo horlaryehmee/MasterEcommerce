@@ -66,6 +66,7 @@ class Product extends Model
         'description',
         'price',
         'compare_at_price',
+        'options',
         'availability',
         'is_featured',
         'is_new_arrival',
@@ -80,6 +81,9 @@ class Product extends Model
         return [
             'price' => 'decimal:2',
             'compare_at_price' => 'decimal:2',
+            'price_max' => 'decimal:2',
+            'options' => 'array',
+            'has_variants' => 'boolean',
             'is_featured' => 'boolean',
             'is_new_arrival' => 'boolean',
             'published_at' => 'datetime',
@@ -112,6 +116,52 @@ class Product extends Model
     public function images(): HasMany
     {
         return $this->hasMany(ProductImage::class)->orderByDesc('is_primary')->orderBy('sort_order')->orderBy('id');
+    }
+
+    public function variants(): HasMany
+    {
+        return $this->hasMany(ProductVariant::class)->orderBy('sort_order')->orderBy('id');
+    }
+
+    /** Options as stored: [{name, values: [{label, color}]}]. */
+    public function optionList(): array
+    {
+        return $this->has_variants ? array_values($this->options ?? []) : [];
+    }
+
+    /** Variants have different prices, so cards say "From". */
+    public function hasPriceRange(): bool
+    {
+        return $this->has_variants && $this->price_max !== null && (float) $this->price_max > (float) $this->price;
+    }
+
+    /**
+     * Keep the product's own price and availability in step with its variants,
+     * so cards, sorting, search engines and feeds keep working: price is the
+     * lowest (with that variant's previous price), price_max the highest, and
+     * availability the best one any enabled variant has.
+     */
+    public function syncFromVariants(): void
+    {
+        $variants = $this->variants()->get();
+        $enabled = $variants->where('is_enabled', true);
+        if (! $this->has_variants || $variants->isEmpty()) {
+            $this->forceFill(['has_variants' => false, 'price_max' => null])->save();
+
+            return;
+        }
+
+        $pool = $enabled->isNotEmpty() ? $enabled : $variants;
+        $cheapest = $pool->sortBy(fn (ProductVariant $v) => (float) $v->price)->first();
+        $best = collect(['in_stock', 'limited', 'pre_order', 'on_request'])
+            ->first(fn ($a) => $enabled->contains('availability', $a)) ?? 'out_of_stock';
+
+        $this->forceFill([
+            'price' => $cheapest->price,
+            'compare_at_price' => $cheapest->hasDiscount() ? $cheapest->compare_at_price : null,
+            'price_max' => $pool->max(fn (ProductVariant $v) => (float) $v->price),
+            'availability' => $best,
+        ])->save();
     }
 
     public function primaryImage(): HasOne
@@ -202,8 +252,11 @@ class Product extends Model
             'slug' => $this->slug,
             'url' => $this->url(),
             'price' => Money::format($this->price),
+            'price_from' => $this->hasPriceRange(),
             'compare_at_price' => $this->hasDiscount() ? Money::format($this->compare_at_price) : null,
             'discount_percent' => $this->discountPercent(),
+            // Options must be chosen on the product page, so cards link there instead of adding to the cart.
+            'has_variants' => (bool) $this->has_variants,
             'is_featured' => $this->is_featured,
             'is_new_arrival' => $this->is_new_arrival,
             'availability' => $this->availability,
@@ -229,6 +282,30 @@ class Product extends Model
             ] : null,
             'is_published' => $this->isPublished(),
             'purchasable' => $this->isPurchasable(),
+            ...$this->variantDetail(),
         ]);
+    }
+
+    /** Options and enabled variants for the product page (empty for simple products). */
+    protected function variantDetail(): array
+    {
+        if (! $this->has_variants) {
+            return ['options' => [], 'variants' => []];
+        }
+        $imageIndex = $this->images->values()->mapWithKeys(fn (ProductImage $img, int $i) => [$img->id => $i])->all();
+        $variants = $this->variants->where('is_enabled', true)->values();
+        // Only values that some enabled variant uses.
+        $used = fn (int $i) => $variants->map(fn (ProductVariant $v) => $v->values()[$i] ?? null)->filter()->unique()->all();
+
+        return [
+            'options' => collect($this->optionList())->map(fn (array $o, int $i) => [
+                'name' => $o['name'],
+                'values' => collect($o['values'])->filter(fn ($v) => in_array($v['label'], $used($i), true))->map(fn ($v) => [
+                    'label' => $v['label'],
+                    'color' => $v['color'] ?? null,
+                ])->values()->all(),
+            ])->values()->all(),
+            'variants' => $variants->map(fn (ProductVariant $v) => $v->toStorefront($imageIndex))->all(),
+        ];
     }
 }

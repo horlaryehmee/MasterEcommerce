@@ -1,14 +1,16 @@
 import { Link, useForm } from '@inertiajs/react';
-import { ArrowDown, ArrowUp, BadgeCheck, ChevronRight, ExternalLink, FileText, Images, LayoutGrid, Megaphone, Info, PanelBottom, Pencil, Plus, Search, Sparkles, Star, Tag, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, BadgeCheck, GalleryHorizontalEnd, ChevronRight, ExternalLink, FileText, Images, LayoutGrid, Megaphone, Info, PanelBottom, Pencil, Plus, Search, Sparkles, Star, Tag, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { Badge, Button, Card, ColorInput, FormActions, ImageField, MarkdownField, PageHeader, Select, TextInput, Textarea, Toggle } from '@/Components/Admin/ui';
 import HeroEditor from '@/Components/Admin/HeroEditor';
+import MarqueeStrip from '@/Components/Store/Home/Marquee';
 import AdminLayout from '@/Layouts/AdminLayout';
 import { putWithFiles } from '@/lib/forms';
 
 const TABS = [
     ['announcement', 'Announcement bar'],
     ['hero', 'Hero banner & slider'],
+    ['marquee', 'Scrolling text strip'],
     ['categories', 'Featured categories'],
     ['featured', 'Featured products'],
     ['new_arrivals', 'New arrivals'],
@@ -24,6 +26,7 @@ const MENU = [
     ['Homepage', [
         ['announcement', Megaphone, 'bg-amber-500', 'Thin bar at the very top of every page'],
         ['hero', Images, 'bg-sky-500', 'Big banner or slider at the top'],
+        ['marquee', GalleryHorizontalEnd, 'bg-fuchsia-500', 'Moving line of short messages under the hero'],
         ['categories', LayoutGrid, 'bg-violet-500', '“Shop by Category” section'],
         ['featured', Star, 'bg-yellow-500', 'Hand-picked products'],
         ['new_arrivals', Sparkles, 'bg-pink-500', 'Latest products row'],
@@ -374,7 +377,115 @@ function Pages({ pages }) {
     );
 }
 
-export default function ContentEdit({ home, footer, categories, products, pages, icons, slides, heroOptions }) {
+const SEPARATORS = ['✱', '•', '✦', '★', '◆', '|', '—', '✿'];
+
+function MarqueeSection({ home, speeds }) {
+    return (
+        <SectionForm
+            section="marquee"
+            title="Scrolling text strip"
+            description="A line of short messages that moves slowly across the screen, right under the hero — opening hours, delivery promises, offers."
+            initial={{
+                marquee_enabled: home.marquee_enabled,
+                marquee_items: home.marquee_items?.length ? home.marquee_items : ['Open Mon – Sun', 'Same-day delivery', 'Fresh, hand-picked products'],
+                marquee_separator: home.marquee_separator ?? '✱',
+                marquee_bg_color: home.marquee_bg_color ?? '#FFFFFF',
+                marquee_text_color: home.marquee_text_color ?? '#111111',
+                marquee_accent_color: home.marquee_accent_color ?? '',
+                marquee_border: home.marquee_border ?? true,
+                marquee_uppercase: home.marquee_uppercase ?? true,
+                marquee_speed: home.marquee_speed ?? 'normal',
+            }}
+        >
+            {(form) => {
+                const d = form.data;
+                const items = d.marquee_items;
+                const setItem = (i, v) => form.setData('marquee_items', items.map((x, j) => (j === i ? v : x)));
+                const move = (i, delta) => {
+                    const next = [...items];
+                    [next[i], next[i + delta]] = [next[i + delta], next[i]];
+                    form.setData('marquee_items', next);
+                };
+                const preview = items.some((t) => t.trim())
+                    ? { items: items.filter((t) => t.trim()), separator: d.marquee_separator, bg: d.marquee_bg_color, color: d.marquee_text_color, accent: d.marquee_accent_color || null, border: d.marquee_border, uppercase: d.marquee_uppercase, speed: d.marquee_speed }
+                    : null;
+
+                return (
+                    <>
+                        {enabled(form, 'marquee_enabled', 'Show the scrolling text strip')}
+
+                        <div>
+                            <p className="mb-2 text-sm font-medium text-zinc-800">Messages</p>
+                            <div className="space-y-2">
+                                {items.map((item, i) => (
+                                    <div key={i} className="flex items-start gap-1.5">
+                                        <div className="min-w-0 flex-1">
+                                            <input className={`input ${form.errors[`marquee_items.${i}`] ? 'input-error' : ''}`} value={item} maxLength={80} placeholder="e.g. Free delivery in Lagos" onChange={(e) => setItem(i, e.target.value)} aria-label={`Message ${i + 1}`} />
+                                            {form.errors[`marquee_items.${i}`] && <p className="mt-1 text-xs font-medium text-red-600">{form.errors[`marquee_items.${i}`]}</p>}
+                                        </div>
+                                        <button type="button" onClick={() => move(i, -1)} disabled={i === 0} className="rounded-lg p-2.5 text-zinc-500 hover:bg-zinc-100 disabled:opacity-30" aria-label="Move up">
+                                            <ArrowUp size={16} />
+                                        </button>
+                                        <button type="button" onClick={() => move(i, 1)} disabled={i === items.length - 1} className="rounded-lg p-2.5 text-zinc-500 hover:bg-zinc-100 disabled:opacity-30" aria-label="Move down">
+                                            <ArrowDown size={16} />
+                                        </button>
+                                        <button type="button" onClick={() => form.setData('marquee_items', items.filter((_, j) => j !== i))} disabled={items.length === 1} className="rounded-lg p-2.5 text-zinc-500 hover:bg-red-50 hover:text-red-600 disabled:opacity-30" aria-label="Remove">
+                                            <Trash2 size={16} />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                            {items.length < 12 && (
+                                <Button type="button" variant="secondary" className="mt-3" onClick={() => form.setData('marquee_items', [...items, ''])}>
+                                    <Plus size={16} /> Add message
+                                </Button>
+                            )}
+                            {form.errors.marquee_items && <p className="mt-1.5 text-xs font-medium text-red-600">{form.errors.marquee_items}</p>}
+                        </div>
+
+                        <div>
+                            <p className="mb-2 text-sm font-medium text-zinc-800">Separator</p>
+                            <div className="flex flex-wrap gap-1.5">
+                                {SEPARATORS.map((sep) => (
+                                    <button key={sep} type="button" onClick={() => form.setData('marquee_separator', sep)} className={`flex h-10 w-10 items-center justify-center rounded-lg border text-base ${d.marquee_separator === sep ? 'border-zinc-900 bg-zinc-900 text-white' : 'border-zinc-200 text-zinc-700 hover:border-zinc-400'}`} aria-label={`Use ${sep}`}>
+                                        {sep}
+                                    </button>
+                                ))}
+                                <input className="input h-10 w-20 text-center" maxLength={8} value={d.marquee_separator} onChange={(e) => form.setData('marquee_separator', e.target.value)} aria-label="Custom separator" placeholder="None" />
+                            </div>
+                        </div>
+
+                        <div className="grid gap-5 sm:grid-cols-3">
+                            <ColorInput label="Background" value={d.marquee_bg_color} onChange={(v) => form.setData('marquee_bg_color', v)} error={form.errors.marquee_bg_color} />
+                            <ColorInput label="Text" value={d.marquee_text_color} onChange={(v) => form.setData('marquee_text_color', v)} error={form.errors.marquee_text_color} />
+                            <div>
+                                <ColorInput label="Separators & lines" value={d.marquee_accent_color || ''} onChange={(v) => form.setData('marquee_accent_color', v)} error={form.errors.marquee_accent_color} help={d.marquee_accent_color ? undefined : 'Uses your brand accent colour.'} />
+                                {d.marquee_accent_color && (
+                                    <button type="button" onClick={() => form.setData('marquee_accent_color', '')} className="mt-1 text-xs font-medium text-zinc-500 underline hover:text-zinc-900">
+                                        Use brand accent
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="grid gap-5 sm:grid-cols-3">
+                            <Select label="Speed" options={Object.entries(speeds).map(([value, label]) => ({ value, label }))} {...text(form, 'marquee_speed')} />
+                            <Toggle label="Capital letters" checked={d.marquee_uppercase} onChange={(v) => form.setData('marquee_uppercase', v)} />
+                            <Toggle label="Lines above and below" checked={d.marquee_border} onChange={(v) => form.setData('marquee_border', v)} />
+                        </div>
+
+                        <div>
+                            <p className="mb-2 text-sm font-medium text-zinc-800">Preview</p>
+                            <div className="overflow-hidden rounded-xl border border-zinc-200">{preview ? <MarqueeStrip marquee={preview} /> : <p className="p-4 text-sm text-zinc-500">Add a message to see the preview.</p>}</div>
+                        </div>
+                    </>
+                );
+            }}
+        </SectionForm>
+    );
+}
+
+export default function ContentEdit({ home, footer, categories, products, pages, icons, slides, heroOptions, marqueeSpeeds }) {
     const initial = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '').get('tab');
     const [tab, setTab] = useState(() => (TABS.some(([k]) => k === initial) ? initial : 'hero'));
     // Phones show the section menu until a section is opened.
@@ -396,6 +507,7 @@ export default function ContentEdit({ home, footer, categories, products, pages,
     const panels = {
         announcement: <Announcement home={home} />,
         hero: <HeroEditor home={home} slides={slides} options={heroOptions} />,
+        marquee: <MarqueeSection home={home} speeds={marqueeSpeeds} />,
         categories: <FeaturedCategories home={home} categories={categories} />,
         featured: <FeaturedProducts home={home} products={products} />,
         new_arrivals: <NewArrivals home={home} />,

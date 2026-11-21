@@ -97,6 +97,7 @@ export default function Hero({ hero }) {
                     roomForText
                     headingLevel="h1"
                     mobileText={hero.slider.mobile_text}
+                    shade={hero.slider.shade}
                 />
             </Frame>
         );

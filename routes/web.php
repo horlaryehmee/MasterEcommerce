@@ -60,6 +60,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('orders/{order}', [Admin\OrderController::class, 'show'])->name('orders.show');
         Route::patch('orders/{order}', [Admin\OrderController::class, 'update'])->name('orders.update');
 
+        Route::patch('coupons/{coupon}/toggle', [Admin\CouponController::class, 'toggle'])->name('coupons.toggle');
+        Route::resource('coupons', Admin\CouponController::class)->except('show');
+
+        Route::get('templates', [Admin\TemplateController::class, 'index'])->name('templates.index');
+        Route::put('templates', [Admin\TemplateController::class, 'update'])->name('templates.update');
+
         Route::post('shipping-zones/reorder', [Admin\ShippingZoneController::class, 'reorder'])->name('shipping-zones.reorder');
         Route::resource('shipping-zones', Admin\ShippingZoneController::class)->except(['index', 'show']);
 
@@ -98,6 +104,10 @@ Route::prefix('admin')->name('admin.')->group(function () {
 */
 
 Route::get('/', Storefront\HomeController::class)->name('home');
+
+// Template previews (Admin → Templates): a signed, shareable link starts a preview in this browser.
+Route::get('preview/template/{template}', [Storefront\TemplatePreviewController::class, 'start'])->middleware('throttle:30,1')->name('template.preview');
+Route::get('preview/exit', [Storefront\TemplatePreviewController::class, 'exit'])->name('template.exit');
 Route::get('products', [Storefront\ProductController::class, 'index'])->name('products.index');
 Route::get('products/{slug}', [Storefront\ProductController::class, 'show'])->name('products.show');
 Route::get('categories', [Storefront\CategoryController::class, 'index'])->name('categories.index');
@@ -112,8 +122,11 @@ Route::post('hello', [Storefront\StatsController::class, 'collect'])->middleware
 Route::middleware('shop')->group(function () {
     Route::get('cart', [Storefront\CartController::class, 'show'])->name('cart.show');
     Route::post('cart', [Storefront\CartController::class, 'store'])->middleware('throttle:60,1')->name('cart.store');
-    Route::patch('cart/{product}', [Storefront\CartController::class, 'update'])->name('cart.update');
-    Route::delete('cart/{product}', [Storefront\CartController::class, 'destroy'])->name('cart.destroy');
+    // Throttled tightly: guessing codes is the obvious abuse. (Before cart/{product}, which would match "coupon".)
+    Route::post('cart/coupon', [Storefront\CartController::class, 'applyCoupon'])->middleware('throttle:15,1')->name('cart.coupon.store');
+    Route::delete('cart/coupon', [Storefront\CartController::class, 'removeCoupon'])->name('cart.coupon.destroy');
+    Route::patch('cart/{line}', [Storefront\CartController::class, 'update'])->where('line', '\d+(:\d+)?')->name('cart.update');
+    Route::delete('cart/{line}', [Storefront\CartController::class, 'destroy'])->where('line', '\d+(:\d+)?')->name('cart.destroy');
     Route::get('checkout', [Storefront\CheckoutController::class, 'show'])->name('checkout.show');
     Route::get('checkout/rates', [Storefront\CheckoutController::class, 'rates'])->middleware('throttle:120,1')->name('checkout.rates');
     Route::post('checkout', [Storefront\CheckoutController::class, 'store'])->middleware('throttle:10,1')->name('checkout.store');

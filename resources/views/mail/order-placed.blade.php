@@ -13,9 +13,12 @@ Hi {{ $detail['customer_name'] }}, we've received your order **#{{ $detail['numb
 | Item | Qty | Total |
 |:-----|:---:|------:|
 @foreach ($detail['items'] as $item)
-| {{ $item['name'] }} | {{ $item['quantity'] }} | {{ $item['line_total'] }} |
+| {{ $item['name'] }}{{ $item['variant'] ? ' — '.$item['variant'] : '' }} | {{ $item['quantity'] }} | {{ $item['line_total'] }} |
 @endforeach
 | Subtotal | | {{ $detail['subtotal'] }} |
+@if ($detail['coupon_code'])
+| Coupon ({{ $detail['coupon_code'] }}) | | {{ $detail['discount'] ? '−'.$detail['discount'] : 'Applied' }} |
+@endif
 | {{ $detail['shipping_method'] ?: 'Delivery' }} | | {{ $detail['shipping_cost'] }} |
 | **Total** | | **{{ $detail['total'] }}** |
 </x-mail::table>

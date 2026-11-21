@@ -3,6 +3,7 @@ import { Banknote, Check, ChevronDown, Info, Landmark, Loader2, Lock, Package, S
 import { useEffect, useId, useRef, useState } from 'react';
 import { WhatsAppIcon } from '@/Components/Icons';
 import Breadcrumbs from '@/Components/Store/Breadcrumbs';
+import CouponBox from '@/Components/Store/CouponBox';
 import Img from '@/Components/Store/Img';
 import StoreLayout from '@/Layouts/StoreLayout';
 import { formatMoney } from '@/lib/money';
@@ -87,9 +88,10 @@ const RATE_ICONS = { flat_rate: Truck, free_shipping: Package, local_pickup: Sto
 /**
  * Shipping options for the address typed so far, fetched from the server
  * (which also re-checks them when the order is placed). Postcode changes are
- * debounced; stale responses are ignored.
+ * debounced; stale responses are ignored. `refreshKey` changes when a coupon
+ * is applied or removed (it can unlock free shipping).
  */
-function useShippingRates(country, state, postcode, initial) {
+function useShippingRates(country, state, postcode, initial, refreshKey) {
     const [rates, setRates] = useState(initial);
     const [loading, setLoading] = useState(false);
     const first = useRef(true);
@@ -116,12 +118,12 @@ function useShippingRates(country, state, postcode, initial) {
             }
         }, 350);
         return () => clearTimeout(t);
-    }, [country, state, postcode]);
+    }, [country, state, postcode, refreshKey]);
 
     return { rates, loading };
 }
 
-export default function Checkout({ items, subtotal, countries, states, defaultCountry, shippingConfigured, initialRates, paymentMethods, money }) {
+export default function Checkout({ items, subtotal, discount = 0, coupon, couponsEnabled, couponNotice, countries, states, defaultCountry, shippingConfigured, initialRates, paymentMethods, money }) {
     const form = useForm({
         customer_name: '',
         customer_phone: '',
@@ -145,7 +147,13 @@ export default function Checkout({ items, subtotal, countries, states, defaultCo
     const err = form.errors;
 
     const countryStates = states[d.country] || null;
-    const { rates, loading } = useShippingRates(d.country, d.state, d.postcode, initialRates);
+    const { rates, loading } = useShippingRates(d.country, d.state, d.postcode, initialRates, `${coupon?.code ?? ''}:${discount}`);
+
+    // A coupon problem from placing the order goes once the coupon is changed.
+    useEffect(() => {
+        if (form.errors.coupon) form.clearErrors('coupon');
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [coupon?.code]);
 
     // Keep the chosen option if it is still offered for the new address; otherwise pick the first.
     useEffect(() => {
@@ -156,7 +164,7 @@ export default function Checkout({ items, subtotal, countries, states, defaultCo
     const rate = rates.find((r) => r.id === Number(d.shipping_method));
     const pickup = rate?.type === 'local_pickup';
     const fee = rate?.cost ?? 0;
-    const total = subtotal + fee;
+    const total = Math.max(0, subtotal - discount) + fee;
     const count = items.reduce((n, i) => n + i.quantity, 0);
     const needsState = !!countryStates && !d.state;
 
@@ -301,12 +309,13 @@ export default function Checkout({ items, subtotal, countries, states, defaultCo
                             </div>
                             <ul className="mt-4 max-h-80 space-y-3 overflow-y-auto">
                                 {items.map((i) => (
-                                    <li key={i.id} className="flex items-center gap-3">
+                                    <li key={i.key} className="flex items-center gap-3">
                                         <span className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-stone-100">
                                             <Img image={i.image} sizes="56px" className="h-full w-full object-cover" />
                                         </span>
                                         <span className="min-w-0 flex-1">
                                             <span className="line-clamp-2 text-sm text-stone-800">{i.name}</span>
+                                            {i.variant && <span className="block text-xs font-medium text-stone-600">{i.variant}</span>}
                                             <span className="text-xs text-stone-500">
                                                 {i.quantity} × {i.unit_price}
                                             </span>
@@ -315,6 +324,11 @@ export default function Checkout({ items, subtotal, countries, states, defaultCo
                                     </li>
                                 ))}
                             </ul>
+                            {(couponsEnabled || couponNotice || err.coupon) && (
+                                <div className="mt-5 border-t border-stone-100 pt-4">
+                                    <CouponBox coupon={coupon} notice={couponNotice} error={err.coupon} />
+                                </div>
+                            )}
                             <dl className="mt-5 space-y-2 border-t border-stone-100 pt-4 text-sm">
                                 <div className="flex justify-between">
                                     <dt className="text-stone-600">
@@ -322,6 +336,12 @@ export default function Checkout({ items, subtotal, countries, states, defaultCo
                                     </dt>
                                     <dd className="font-medium text-stone-900">{fmt(subtotal)}</dd>
                                 </div>
+                                {coupon && (
+                                    <div className="flex justify-between gap-3">
+                                        <dt className="min-w-0 truncate text-stone-600">Coupon · {coupon.code}</dt>
+                                        <dd className="shrink-0 font-medium text-emerald-700">{discount > 0 ? `−${fmt(discount)}` : 'Applied'}</dd>
+                                    </div>
+                                )}
                                 <div className="flex justify-between gap-3">
                                     <dt className="min-w-0 truncate text-stone-600">{rate ? rate.title : 'Delivery'}</dt>
                                     <dd className={`shrink-0 ${fee > 0 ? 'font-medium text-stone-900' : 'text-stone-500'}`}>{shippingLabel}</dd>

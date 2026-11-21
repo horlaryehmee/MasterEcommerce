@@ -52,6 +52,18 @@ class HomepageSetting extends Model
         'below' => 'Below the image (image stays fully visible)',
     ];
 
+    /** Slider dots: where they sit at the bottom of the banner. */
+    public const DOTS_POSITIONS = ['left' => 'Left', 'center' => 'Centre', 'right' => 'Right'];
+
+    /** How much the banner image is darkened (or lightened) behind the text, for readability. */
+    public const SHADES = [
+        'strong' => 'Strong (best for busy photos)',
+        'soft' => 'Soft',
+        'none' => 'None (the image already has a plain area for the text)',
+    ];
+
+    public const MARQUEE_SPEEDS = ['slow' => 'Slow', 'normal' => 'Normal', 'fast' => 'Fast'];
+
     protected $guarded = ['id', 'created_at', 'updated_at'];
 
     protected $attributes = [
@@ -64,6 +76,15 @@ class HomepageSetting extends Model
         'hero_interval' => 6,
         'hero_desktop_height' => 'standard',
         'hero_mobile_height' => 'portrait',
+        'hero_dots_position' => 'center',
+        'hero_shade' => 'strong',
+        'marquee_enabled' => false,
+        'marquee_separator' => '✱',
+        'marquee_bg_color' => '#FFFFFF',
+        'marquee_text_color' => '#111111',
+        'marquee_border' => true,
+        'marquee_uppercase' => true,
+        'marquee_speed' => 'normal',
         'announcement_enabled' => false,
         'announcement_bg_color' => '#111827',
         'announcement_text_color' => '#FFFFFF',
@@ -81,6 +102,10 @@ class HomepageSetting extends Model
     {
         return [
             'announcement_enabled' => 'boolean',
+            'marquee_enabled' => 'boolean',
+            'marquee_items' => 'array',
+            'marquee_border' => 'boolean',
+            'marquee_uppercase' => 'boolean',
             'hero_enabled' => 'boolean',
             'hero_autoplay' => 'boolean',
             'hero_interval' => 'integer',

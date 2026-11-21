@@ -142,6 +142,7 @@ export default function OrderConfirmation({ order, whatsappUrl, bank, justPlaced
                                         ) : (
                                             <span className="line-clamp-2 text-sm text-stone-800">{i.name}</span>
                                         )}
+                                        {i.variant && <span className="block text-xs font-medium text-stone-600">{i.variant}</span>}
                                         <span className="text-xs text-stone-500">
                                             {i.quantity} × {i.unit_price}
                                         </span>
@@ -155,6 +156,12 @@ export default function OrderConfirmation({ order, whatsappUrl, bank, justPlaced
                                 <dt className="text-stone-600">Subtotal</dt>
                                 <dd className="font-medium text-stone-900">{order.subtotal}</dd>
                             </div>
+                            {order.coupon_code && (
+                                <div className="flex justify-between gap-3">
+                                    <dt className="min-w-0 truncate text-stone-600">Coupon · {order.coupon_code}</dt>
+                                    <dd className="shrink-0 font-medium text-emerald-700">{order.discount ? `−${order.discount}` : 'Applied'}</dd>
+                                </div>
+                            )}
                             <div className="flex justify-between">
                                 <dt className="text-stone-600">{order.shipping_method || 'Delivery'}</dt>
                                 <dd className="text-stone-900">{order.shipping_cost}</dd>

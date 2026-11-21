@@ -2,6 +2,7 @@ import { Link, router } from '@inertiajs/react';
 import { ArrowRight, Info, ShoppingCart, Trash2, Truck } from 'lucide-react';
 import { useState } from 'react';
 import Breadcrumbs from '@/Components/Store/Breadcrumbs';
+import CouponBox from '@/Components/Store/CouponBox';
 import Img from '@/Components/Store/Img';
 import QuantityStepper from '@/Components/Store/QuantityStepper';
 import StoreLayout from '@/Layouts/StoreLayout';
@@ -9,8 +10,8 @@ import StoreLayout from '@/Layouts/StoreLayout';
 function CartLine({ item }) {
     const [busy, setBusy] = useState(false);
     const opts = { preserveScroll: true, onStart: () => setBusy(true), onFinish: () => setBusy(false) };
-    const setQuantity = (quantity) => router.patch(`/cart/${item.id}`, { quantity }, opts);
-    const remove = () => router.delete(`/cart/${item.id}`, opts);
+    const setQuantity = (quantity) => router.patch(`/cart/${item.key}`, { quantity }, opts);
+    const remove = () => router.delete(`/cart/${item.key}`, opts);
 
     return (
         <li className={`flex gap-4 py-5 transition-opacity ${busy ? 'opacity-60' : ''}`}>
@@ -24,6 +25,7 @@ function CartLine({ item }) {
                         <Link href={item.url} className="mt-0.5 line-clamp-2 text-sm font-medium text-stone-900 hover:underline sm:text-base">
                             {item.name}
                         </Link>
+                        {item.variant && <p className="mt-1 text-sm font-medium text-stone-700">{item.variant}</p>}
                         <p className="mt-1 text-sm text-stone-500">{item.unit_price}</p>
                         {item.availability === 'pre_order' && <p className="mt-1 text-xs font-medium text-violet-700">{item.availability_label}</p>}
                     </div>
@@ -61,7 +63,7 @@ function FreeDelivery({ info }) {
     );
 }
 
-export default function Cart({ items, subtotal, freeDelivery, notice }) {
+export default function Cart({ items, subtotal, total, coupon, couponsEnabled, couponNotice, freeDelivery, notice }) {
     const count = items.reduce((n, i) => n + i.quantity, 0);
 
     return (
@@ -91,7 +93,7 @@ export default function Cart({ items, subtotal, freeDelivery, notice }) {
                     <div className="mt-6 grid gap-8 lg:grid-cols-[1fr_380px] lg:gap-12">
                         <ul className="divide-y divide-stone-100 border-y border-stone-100">
                             {items.map((item) => (
-                                <CartLine key={item.id} item={item} />
+                                <CartLine key={item.key} item={item} />
                             ))}
                         </ul>
 
@@ -105,11 +107,24 @@ export default function Cart({ items, subtotal, freeDelivery, notice }) {
                                         </dt>
                                         <dd className="font-semibold text-stone-900">{subtotal}</dd>
                                     </div>
+                                    {coupon && (
+                                        <div className="flex justify-between gap-3">
+                                            <dt className="min-w-0 truncate text-stone-600">Coupon · {coupon.code}</dt>
+                                            <dd className="shrink-0 font-medium text-emerald-700">{coupon.discount > 0 ? `−${coupon.discount_label}` : 'Free shipping'}</dd>
+                                        </div>
+                                    )}
                                     <div className="flex justify-between">
                                         <dt className="text-stone-600">Delivery</dt>
                                         <dd className="text-stone-500">Calculated at checkout</dd>
                                     </div>
+                                    {coupon?.discount > 0 && (
+                                        <div className="flex items-baseline justify-between border-t border-stone-100 pt-3">
+                                            <dt className="font-semibold text-stone-900">Total</dt>
+                                            <dd className="text-lg font-bold text-stone-950">{total}</dd>
+                                        </div>
+                                    )}
                                 </dl>
+                                {(couponsEnabled || couponNotice) && <CouponBox coupon={coupon} notice={couponNotice} />}
                                 <FreeDelivery info={freeDelivery} />
                                 <Link href="/checkout" className="btn-primary h-12 w-full text-base">
                                     Checkout <ArrowRight size={17} />

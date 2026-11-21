@@ -6,6 +6,7 @@ use App\Models\BusinessSetting;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
+use App\Models\ProductVariant;
 use Illuminate\Http\Request;
 
 /**
@@ -68,13 +69,15 @@ class Tracking
         ];
     }
 
-    public static function productItem(Product $product, int $quantity = 1): array
+    public static function productItem(Product $product, int $quantity = 1, ?ProductVariant $variant = null): array
     {
         return array_filter([
-            'item_id' => (string) $product->id,
+            // A variation's SKU when it has one, so ad platforms can tell sizes apart.
+            'item_id' => $variant?->sku ?: (string) $product->id,
             'item_name' => $product->name,
+            'item_variant' => $variant?->label(),
             'item_category' => $product->relationLoaded('category') ? $product->category?->name : null,
-            'price' => (float) $product->price,
+            'price' => (float) ($variant ? $variant->price : $product->price),
             'quantity' => $quantity,
         ], fn ($v) => $v !== null);
     }
@@ -84,17 +87,17 @@ class Tracking
         return self::event('view_item', (float) $product->price, [self::productItem($product)]);
     }
 
-    public static function addToCart(Product $product, int $quantity): array
+    public static function addToCart(Product $product, int $quantity, ?ProductVariant $variant = null): array
     {
-        return self::event('add_to_cart', (float) $product->price * $quantity, [self::productItem($product, $quantity)]);
+        return self::event('add_to_cart', (float) ($variant ? $variant->price : $product->price) * $quantity, [self::productItem($product, $quantity, $variant)]);
     }
 
     /** @param array<int, array{product: Product, quantity: int}> $lines */
-    public static function beginCheckout(iterable $lines, float $subtotal): array
+    public static function beginCheckout(iterable $lines, float $subtotal, ?string $coupon = null): array
     {
-        $items = collect($lines)->map(fn ($l) => self::productItem($l['product'], $l['quantity']))->values()->all();
+        $items = collect($lines)->map(fn ($l) => self::productItem($l['product'], $l['quantity'], $l['variant'] ?? null))->values()->all();
 
-        return self::event('begin_checkout', $subtotal, $items);
+        return self::event('begin_checkout', $subtotal, $items, $coupon ? ['coupon' => $coupon] : []);
     }
 
     public static function purchase(Order $order): array
@@ -102,13 +105,16 @@ class Tracking
         $items = $order->items->map(fn (OrderItem $i) => [
             'item_id' => (string) ($i->product_id ?? $i->id),
             'item_name' => $i->product_name,
+            ...($i->variant_label ? ['item_variant' => $i->variant_label] : []),
             'price' => (float) $i->unit_price,
             'quantity' => $i->quantity,
+            ...((float) $i->discount > 0 ? ['discount' => round((float) $i->discount / max(1, $i->quantity), 2)] : []),
         ])->values()->all();
 
         return self::event('purchase', (float) $order->total, $items, [
             'transaction_id' => $order->number,
             'shipping' => (float) $order->delivery_fee,
+            ...($order->coupon_code ? ['coupon' => $order->coupon_code] : []),
         ]);
     }
 

@@ -1,5 +1,5 @@
-import { Link, usePage } from '@inertiajs/react';
-import { ArrowRight, Check, Loader2, ShoppingBag } from 'lucide-react';
+import { Link, router, usePage } from '@inertiajs/react';
+import { ArrowRight, Check, Loader2, ShoppingBag, SlidersHorizontal } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useAddToCart } from '@/lib/cart';
 import Img from './Img';
@@ -23,10 +23,12 @@ export function AvailabilityLabel({ value, label, className = '' }) {
     );
 }
 
-export function PriceTag({ price, compareAt, size = 'md' }) {
+/** `from`: variations have different prices, so this is the lowest ("From ₦5,000"). */
+export function PriceTag({ price, compareAt, from = false, size = 'md' }) {
     const big = size === 'lg';
     return (
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            {from && <span className={`font-medium text-stone-500 ${big ? 'text-base' : 'text-xs sm:text-[13px]'}`}>From</span>}
             <span className={`font-bold text-stone-900 ${big ? 'text-3xl tracking-tight' : 'text-[15px] sm:text-base'}`}>{price}</span>
             {compareAt && (
                 <span className={`text-stone-400 line-through ${big ? 'text-lg' : 'text-xs sm:text-sm'}`}>
@@ -39,10 +41,14 @@ export function PriceTag({ price, compareAt, size = 'md' }) {
 }
 
 
-/** Shared quick-add state: busy while posting, then a short "Added" tick. */
+/**
+ * Shared quick-add state: busy while posting, then a short "Added" tick.
+ * Products with options (size, colour…) open the product page instead, where they're chosen.
+ */
 function useQuickAdd(product) {
     const { add, busy } = useAddToCart();
     const [done, setDone] = useState(false);
+    const choose = !!product.has_variants;
 
     useEffect(() => {
         if (!done) return;
@@ -53,19 +59,21 @@ function useQuickAdd(product) {
     return {
         busy: !!busy,
         done,
+        choose,
+        label: done ? 'Added' : choose ? 'Choose options' : 'Add to cart',
         props: {
             type: 'button',
-            onClick: () => add(product.id, { onSuccess: () => setDone(true) }),
+            onClick: () => (choose ? router.visit(product.url) : add(product.id, { onSuccess: () => setDone(true) })),
             disabled: !!busy,
-            'aria-label': `Add ${product.name} to cart`,
+            'aria-label': choose ? `Choose options for ${product.name}` : `Add ${product.name} to cart`,
         },
     };
 }
 
-function BagIcon({ busy, done, size = 18 }) {
+function BagIcon({ busy, done, choose = false, size = 18 }) {
     if (busy) return <Loader2 size={size} className="animate-spin" />;
     if (done) return <Check size={size} strokeWidth={2.5} />;
-    return <ShoppingBag size={size} />;
+    return choose ? <SlidersHorizontal size={size} /> : <ShoppingBag size={size} />;
 }
 
 // Class names are written out in full (no string building) so Tailwind can find them.
@@ -81,11 +89,11 @@ function OverlayButton({ product, forceVisible = false }) {
             } ${q.done || forceVisible ? '[@media(hover:hover)]:translate-y-0! [@media(hover:hover)]:opacity-100!' : ''}`}
         >
             <span className="[@media(hover:hover)]:hidden">
-                <BagIcon busy={q.busy} done={q.done} />
+                <BagIcon busy={q.busy} done={q.done} choose={q.choose} />
             </span>
             <span className="hidden items-center gap-2 text-sm font-semibold [@media(hover:hover)]:inline-flex">
-                <BagIcon busy={q.busy} done={q.done} size={17} />
-                {q.done ? 'Added' : 'Add to cart'}
+                <BagIcon busy={q.busy} done={q.done} choose={q.choose} size={17} />
+                {q.label}
             </span>
         </button>
     );
@@ -96,8 +104,8 @@ function BlockButton({ product }) {
     const q = useQuickAdd(product);
     return (
         <button {...q.props} className={`relative z-10 mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-full border text-[13px] font-semibold transition active:scale-[0.97] disabled:cursor-wait sm:h-11 sm:text-sm ${q.done ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-stone-900 text-stone-900 hover:bg-stone-900 hover:text-white'}`}>
-            <BagIcon busy={q.busy} done={q.done} size={16} />
-            {q.done ? 'Added' : 'Add to cart'}
+            <BagIcon busy={q.busy} done={q.done} choose={q.choose} size={16} />
+            {q.label}
         </button>
     );
 }
@@ -107,7 +115,7 @@ function IconButton({ product }) {
     const q = useQuickAdd(product);
     return (
         <button {...q.props} className={`relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition active:scale-90 disabled:cursor-wait ${q.done ? 'bg-emerald-600 text-white' : 'bg-brand text-on-brand hover:opacity-90'}`}>
-            <BagIcon busy={q.busy} done={q.done} size={17} />
+            <BagIcon busy={q.busy} done={q.done} choose={q.choose} size={17} />
         </button>
     );
 }
@@ -169,7 +177,7 @@ function ModernCard({ product, eager, quickAdd, soldOut, note, preview }) {
                 <Category product={product} />
                 <Title product={product} className="mt-1" />
                 <div className="mt-1.5">
-                    <PriceTag price={product.price} compareAt={product.compare_at_price} />
+                    <PriceTag price={product.price} compareAt={product.compare_at_price} from={product.price_from} />
                 </div>
                 {note && <AvailabilityLabel value={product.availability} label={note} className="mt-1.5" />}
             </div>
@@ -188,7 +196,7 @@ function ClassicCard({ product, eager, quickAdd, soldOut, note }) {
                 <Category product={product} />
                 <Title product={product} rounded="after:rounded-2xl" className="mt-1" />
                 <div className="mt-1.5">
-                    <PriceTag price={product.price} compareAt={product.compare_at_price} />
+                    <PriceTag price={product.price} compareAt={product.compare_at_price} from={product.price_from} />
                 </div>
                 {(note || soldOut) && <AvailabilityLabel value={product.availability} label={soldOut ? 'Out of stock' : note} className="mt-1.5" />}
                 <div className="mt-auto">
@@ -219,7 +227,7 @@ function BoxedCard({ product, eager, quickAdd, soldOut, note }) {
                 <Title product={product} className="mt-1" />
                 {note && <AvailabilityLabel value={product.availability} label={note} className="mt-1.5" />}
                 <div className="mt-auto flex items-end justify-between gap-2 pt-3">
-                    <PriceTag price={product.price} compareAt={product.compare_at_price} />
+                    <PriceTag price={product.price} compareAt={product.compare_at_price} from={product.price_from} />
                     {quickAdd ? (
                         <IconButton product={product} />
                     ) : (
@@ -233,7 +241,65 @@ function BoxedCard({ product, eager, quickAdd, soldOut, note }) {
     );
 }
 
-const CARDS = { modern: ModernCard, classic: ClassicCard, boxed: BoxedCard };
+/** Portrait (Atelier): a full-width "Add to cart" bar that slides up over the photo on hover. */
+function BarButton({ product, forceVisible = false }) {
+    const q = useQuickAdd(product);
+    return (
+        <button
+            {...q.props}
+            className={`absolute inset-x-0 bottom-0 z-10 flex h-11 items-center justify-center gap-2 text-[13px] font-semibold tracking-wide uppercase transition duration-300 disabled:cursor-wait [@media(hover:hover)]:translate-y-full [@media(hover:hover)]:group-hover:translate-y-0 [@media(hover:hover)]:focus-visible:translate-y-0 ${
+                q.done ? 'bg-emerald-600 text-white' : 'bg-white/95 text-stone-900 backdrop-blur hover:bg-brand hover:text-on-brand'
+            } ${q.done || forceVisible ? '[@media(hover:hover)]:translate-y-0!' : ''} max-[639px]:right-2 max-[639px]:bottom-2 max-[639px]:left-auto max-[639px]:h-9 max-[639px]:w-9 max-[639px]:rounded-full max-[639px]:shadow-md`}
+        >
+            <BagIcon busy={q.busy} done={q.done} choose={q.choose} size={16} />
+            <span className="hidden sm:inline">{q.label}</span>
+        </button>
+    );
+}
+
+/** Portrait: tall 3:4 photos, square corners, quiet text — lets clothing take the stage. */
+function PortraitCard({ product, eager, quickAdd, soldOut, note, preview }) {
+    return (
+        <article className="group relative flex flex-col">
+            <div className="relative aspect-[3/4] overflow-hidden bg-stone-100">
+                <Picture product={product} eager={eager} soldOut={soldOut} />
+                <Badges product={product} />
+                {soldOut && <SoldOutChip />}
+                {quickAdd && !soldOut && <BarButton product={product} forceVisible={preview} />}
+            </div>
+            <div className="mt-3 flex flex-1 flex-col">
+                <Title product={product} rounded="after:rounded-none" className="text-[13px] tracking-wide sm:text-sm" />
+                <div className="mt-1">
+                    <PriceTag price={product.price} compareAt={product.compare_at_price} from={product.price_from} />
+                </div>
+                {note && <AvailabilityLabel value={product.availability} label={note} className="mt-1" />}
+            </div>
+        </article>
+    );
+}
+
+/** Soft (Glow): a rounded tinted card, centred text and a round add button. */
+function SoftCard({ product, eager, quickAdd, soldOut, note }) {
+    return (
+        <article className="group relative flex flex-col rounded-[1.75rem] bg-surface/70 p-2 text-center transition duration-300 hover:bg-surface sm:p-2.5">
+            <div className="relative aspect-square overflow-hidden rounded-[1.4rem] bg-white">
+                <Picture product={product} eager={eager} soldOut={soldOut} />
+                <Badges product={product} />
+                {soldOut && <SoldOutChip />}
+            </div>
+            <div className="flex flex-1 flex-col items-center px-2 pt-3 pb-2">
+                <Title product={product} rounded="after:rounded-[1.75rem]" />
+                <div className="mt-1.5 flex justify-center">
+                    <PriceTag price={product.price} compareAt={product.compare_at_price} from={product.price_from} />
+                </div>
+                {note && <AvailabilityLabel value={product.availability} label={note} className="mt-1.5" />}
+                <div className="mt-auto pt-3">{quickAdd ? <IconButton product={product} /> : <span className="block h-10" aria-hidden />}</div>
+            </div>
+        </article>
+    );
+}
+
+const CARDS = { modern: ModernCard, classic: ClassicCard, boxed: BoxedCard, portrait: PortraitCard, soft: SoftCard };
 
 /**
  * Product card in the design chosen in Admin → Website Settings → Branding.

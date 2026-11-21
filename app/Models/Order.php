@@ -7,6 +7,7 @@ use App\Support\Media;
 use App\Support\Money;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
@@ -44,12 +45,14 @@ class Order extends Model
         'payment_status' => 'unpaid',
         'fulfilment' => 'delivery',
         'delivery_fee' => 0,
+        'discount_total' => 0,
     ];
 
     protected function casts(): array
     {
         return [
             'subtotal' => 'decimal:2',
+            'discount_total' => 'decimal:2',
             'delivery_fee' => 'decimal:2',
             'total' => 'decimal:2',
         ];
@@ -71,6 +74,16 @@ class Order extends Model
         return $this->hasMany(OrderItem::class)->orderBy('id');
     }
 
+    public function coupon(): BelongsTo
+    {
+        return $this->belongsTo(Coupon::class);
+    }
+
+    public function hasDiscount(): bool
+    {
+        return (float) $this->discount_total > 0;
+    }
+
     public function scopeSearch(Builder $query, ?string $term): Builder
     {
         $term = trim((string) $term);
@@ -83,7 +96,8 @@ class Order extends Model
             ->where('number', 'like', $like)
             ->orWhere('customer_name', 'like', $like)
             ->orWhere('customer_phone', 'like', $like)
-            ->orWhere('customer_email', 'like', $like));
+            ->orWhere('customer_email', 'like', $like)
+            ->orWhere('coupon_code', 'like', $like));
     }
 
     public function url(): string
@@ -153,6 +167,8 @@ class Order extends Model
             'address_line' => $this->addressLine(),
             'notes' => $this->notes,
             'subtotal' => Money::format($this->subtotal),
+            'coupon_code' => $this->coupon_code,
+            'discount' => $this->hasDiscount() ? Money::format($this->discount_total) : null,
             'delivery_fee' => (float) $this->delivery_fee > 0 ? Money::format($this->delivery_fee) : null,
             'total' => Money::format($this->total),
             'item_count' => $this->itemCount(),
@@ -160,7 +176,9 @@ class Order extends Model
             'items' => $this->items->map(fn (OrderItem $i) => [
                 'id' => $i->id,
                 'name' => $i->product_name,
-                'url' => $i->product_slug ? route('products.show', $i->product_slug) : null,
+                'variant' => $i->variant_label,
+                'sku' => $i->sku,
+                'url' => $i->product_slug ? route('products.show', $i->product_slug).($i->product_variant_id ? '?variant='.$i->product_variant_id : '') : null,
                 'image' => Media::url($i->image_path, 'sm'),
                 'unit_price' => Money::format($i->unit_price),
                 'quantity' => $i->quantity,

@@ -7,16 +7,12 @@ import { AvailabilityLabel, PriceTag, ProductGrid } from '@/Components/Store/Pro
 import ProductGallery from '@/Components/Store/ProductGallery';
 import QuantityStepper from '@/Components/Store/QuantityStepper';
 import ShareButtons from '@/Components/Store/ShareButtons';
+import VariantPicker, { useVariantSelection } from '@/Components/Store/VariantPicker';
 import WhatsAppButton from '@/Components/Store/WhatsAppButton';
 import StoreLayout from '@/Layouts/StoreLayout';
 import { useAddToCart } from '@/lib/cart';
 
-/** Add to cart / Buy now with a quantity. */
-function useProductCart(product) {
-    const [quantity, setQuantity] = useState(1);
-    const { add, busy } = useAddToCart();
-    return { quantity, setQuantity, busy, add: (checkout = false) => add(product.id, { quantity, checkout, onSuccess: () => !checkout && setQuantity(1) }) };
-}
+const PICKER_ID = 'product-options';
 
 function paymentNote(methods) {
     if (!methods?.length) return '';
@@ -25,16 +21,81 @@ function paymentNote(methods) {
     return `Order online, then ${list}. No card needed.`;
 }
 
+/** The WhatsApp enquiry mentions the chosen variation, so the business knows exactly which one. */
+function withSelection(url, product, selection) {
+    if (!url || !selection.hasVariants) return url;
+    const chosen = selection.options.map((o, i) => (selection.selected[i] ? `${o.name}: ${selection.selected[i]}` : null)).filter(Boolean);
+    if (!chosen.length) return url;
+    try {
+        const u = new URL(url);
+        u.searchParams.set('text', `${u.searchParams.get('text') || product.name}\n${chosen.join(', ')}`);
+        return u.toString();
+    } catch {
+        return url;
+    }
+}
+
 export default function ProductShow({ product, whatsappUrl, related, isPreview }) {
     const { store } = usePage().props;
-    const canBuy = store?.shop_enabled && product.purchasable && !isPreview;
-    const cart = useProductCart(product);
-    const crumbs = [{ label: 'Home', href: '/' }, { label: 'Products', href: '/products' }];
-    if (product.category) crumbs.push({ label: product.category.name, href: product.category.url });
-    crumbs.push({ label: product.name });
+    const selection = useVariantSelection(product);
+    const { variant, missing, hasVariants } = selection;
+    const [quantity, setQuantity] = useState(1);
+    const [nudge, setNudge] = useState(0);
+    const { add, busy } = useAddToCart();
 
-    const soldOut = product.availability === 'out_of_stock';
+    // What the page shows: the chosen variation, or the product (with "From" when variation prices differ).
+    const shown = variant
+        ? {
+              price: variant.price_label,
+              compareAt: variant.compare_at_price,
+              discount: variant.discount_percent,
+              availability: variant.availability,
+              label: variant.availability_label,
+              purchasable: variant.purchasable,
+          }
+        : {
+              price: product.price,
+              compareAt: hasVariants ? null : product.compare_at_price,
+              discount: hasVariants ? null : product.discount_percent,
+              availability: product.availability,
+              label: product.availability_label,
+              purchasable: product.purchasable,
+          };
+    const priceFrom = hasVariants && !variant && product.price_from;
+
+    const shopOn = store?.shop_enabled && !isPreview;
+    // A variable product can be bought until the chosen variation turns out to be sold out.
+    const canBuy = shopOn && product.purchasable && (!variant || variant.purchasable);
+    const soldOut = shown.availability === 'out_of_stock' || (variant && !variant.purchasable);
     const enquiryLabel = soldOut ? 'Ask about availability' : 'Enquire on WhatsApp';
+    const enquiryUrl = withSelection(whatsappUrl, product, selection);
+
+    const addToCart = (checkout = false) => {
+        if (hasVariants && !variant) {
+            // Point at what's missing instead of failing.
+            setNudge((n) => n + 1);
+            document.getElementById(PICKER_ID)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            return;
+        }
+        add(product.id, {
+            variantId: variant?.id ?? null,
+            quantity,
+            checkout,
+            onSuccess: () => !checkout && setQuantity(1),
+        });
+    };
+    const chooseLabel = missing.length ? `Choose ${missing.map((m) => m.toLowerCase()).join(' & ')}` : null;
+
+    const crumbs = [
+        { label: 'Home', href: '/' },
+        { label: 'Products', href: '/products' },
+    ];
+    if (product.category)
+        crumbs.push({
+            label: product.category.name,
+            href: product.category.url,
+        });
+    crumbs.push({ label: product.name });
 
     return (
         <StoreLayout hideFloatingWhatsApp hideBottomNav>
@@ -50,7 +111,7 @@ export default function ProductShow({ product, whatsappUrl, related, isPreview }
                 <Breadcrumbs items={crumbs} />
 
                 <div className="mt-6 grid gap-8 lg:mt-8 lg:grid-cols-2 lg:gap-14">
-                    <ProductGallery images={product.images} name={product.name} />
+                    <ProductGallery images={product.images} name={product.name} activeIndex={selection.imageIndex} />
 
                     <div className="lg:sticky lg:top-28 lg:self-start">
                         {product.category && (
@@ -60,43 +121,64 @@ export default function ProductShow({ product, whatsappUrl, related, isPreview }
                         )}
                         <h1 className="mt-2 text-2xl leading-tight font-bold tracking-tight text-balance text-stone-950 sm:text-3xl lg:text-4xl">{product.name}</h1>
 
-                        <div className="mt-5 flex flex-wrap items-center gap-3">
-                            <PriceTag price={product.price} compareAt={product.compare_at_price} size="lg" />
-                            {product.discount_percent > 0 && (
+                        <div className="mt-5 flex flex-wrap items-center gap-3" aria-live="polite">
+                            <PriceTag price={shown.price} compareAt={shown.compareAt} from={priceFrom} size="lg" />
+                            {shown.discount > 0 && (
                                 <span className="inline-flex items-center gap-1 rounded-full bg-accent/10 px-3 py-1 text-sm font-semibold text-accent">
-                                    <Tag size={14} /> Save {product.discount_percent}%
+                                    <Tag size={14} /> Save {shown.discount}%
                                 </span>
                             )}
                         </div>
 
-                        <div className="mt-4">
-                            <AvailabilityLabel value={product.availability} label={product.availability_label} className="rounded-full bg-stone-100 px-3 py-1.5 text-sm" />
+                        <div className="mt-4 flex flex-wrap items-center gap-2">
+                            <AvailabilityLabel
+                                value={variant && !variant.purchasable && variant.availability !== 'on_request' ? 'out_of_stock' : shown.availability}
+                                label={shown.label}
+                                className="rounded-full bg-stone-100 px-3 py-1.5 text-sm"
+                            />
+                            {variant?.sku && <span className="text-xs text-stone-400">SKU {variant.sku}</span>}
                         </div>
 
                         {product.short_description && <p className="mt-6 text-base leading-relaxed text-stone-600">{product.short_description}</p>}
 
+                        {hasVariants && (
+                            <div className="mt-7">
+                                <VariantPicker selection={selection} highlightMissing={nudge} id={PICKER_ID} />
+                            </div>
+                        )}
+
                         {canBuy ? (
                             <div className="mt-8 space-y-3">
                                 <div className="flex gap-3">
-                                    <QuantityStepper value={cart.quantity} onChange={cart.setQuantity} />
-                                    <button type="button" onClick={() => cart.add(false)} disabled={!!cart.busy} className="btn-primary h-12 flex-1 text-base">
-                                        {cart.busy === 'cart' ? <Loader2 size={18} className="animate-spin" /> : <ShoppingCart size={18} />}
-                                        Add to cart
+                                    <QuantityStepper value={quantity} onChange={setQuantity} />
+                                    <button type="button" onClick={() => addToCart(false)} disabled={!!busy} className="btn-primary h-12 flex-1 text-base">
+                                        {busy === 'cart' ? <Loader2 size={18} className="animate-spin" /> : <ShoppingCart size={18} />}
+                                        {chooseLabel || 'Add to cart'}
                                     </button>
                                 </div>
-                                <button type="button" onClick={() => cart.add(true)} disabled={!!cart.busy} className="btn-outline h-12 w-full text-base">
-                                    {cart.busy === 'checkout' && <Loader2 size={18} className="animate-spin" />}
+                                <button type="button" onClick={() => addToCart(true)} disabled={!!busy} className="btn-outline h-12 w-full text-base">
+                                    {busy === 'checkout' && <Loader2 size={18} className="animate-spin" />}
                                     Buy now
                                 </button>
-                                {whatsappUrl && (
-                                    <a href={whatsappUrl} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 py-1 text-sm font-semibold text-whatsapp-dark hover:underline">
+                                {enquiryUrl && (
+                                    <a
+                                        href={enquiryUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex items-center justify-center gap-2 py-1 text-sm font-semibold text-whatsapp-dark hover:underline"
+                                    >
                                         <WhatsAppIcon size={17} /> Questions? Ask us on WhatsApp
                                     </a>
                                 )}
                             </div>
                         ) : (
                             <div className="mt-8 flex flex-col gap-3">
-                                <WhatsAppButton href={whatsappUrl} size="lg" className="w-full">
+                                {variant && !variant.purchasable && shopOn && (
+                                    <p className="rounded-xl bg-stone-100 px-4 py-3 text-sm text-stone-700">
+                                        {variant.label} is not available to order online right now. Choose another option, or ask us about it.
+                                    </p>
+                                )}
+                                <WhatsAppButton href={enquiryUrl} size="lg" className="w-full">
                                     {enquiryLabel}
                                 </WhatsAppButton>
                                 {store?.phone && (
@@ -125,7 +207,12 @@ export default function ProductShow({ product, whatsappUrl, related, isPreview }
                 {product.description_html && (
                     <section className="mt-14 max-w-3xl border-t border-stone-100 pt-10 sm:mt-16">
                         <h2 className="text-xl font-bold tracking-tight text-stone-900 sm:text-2xl">Product details</h2>
-                        <div className="rich-text mt-5" dangerouslySetInnerHTML={{ __html: product.description_html }} />
+                        <div
+                            className="rich-text mt-5"
+                            dangerouslySetInnerHTML={{
+                                __html: product.description_html,
+                            }}
+                        />
                     </section>
                 )}
 
@@ -137,20 +224,23 @@ export default function ProductShow({ product, whatsappUrl, related, isPreview }
                 )}
             </div>
 
-            {/* Sticky enquiry bar on phones */}
+            {/* Sticky bar on phones */}
             <div className="fixed inset-x-0 bottom-0 z-40 border-t border-stone-200 bg-white/95 backdrop-blur lg:hidden">
                 <div className="container-page flex items-center gap-3 py-3">
                     <div className="min-w-0 flex-1">
-                        <p className="truncate text-xs text-stone-500">{product.name}</p>
-                        <p className="text-base font-bold text-stone-900">{product.price}</p>
+                        <p className="truncate text-xs text-stone-500">{variant ? `${product.name} · ${variant.label}` : product.name}</p>
+                        <p className="text-base font-bold text-stone-900">
+                            {priceFrom && <span className="mr-1 text-xs font-medium text-stone-500">From</span>}
+                            {shown.price}
+                        </p>
                     </div>
                     {canBuy ? (
-                        <button type="button" onClick={() => cart.add(false)} disabled={!!cart.busy} className="btn-primary h-12 px-5">
-                            {cart.busy === 'cart' ? <Loader2 size={18} className="animate-spin" /> : <ShoppingCart size={18} />}
-                            Add to cart
+                        <button type="button" onClick={() => addToCart(false)} disabled={!!busy} className="btn-primary h-12 max-w-[60%] px-5">
+                            {busy === 'cart' ? <Loader2 size={18} className="animate-spin" /> : <ShoppingCart size={18} className="shrink-0" />}
+                            <span className="truncate">{chooseLabel ? 'Choose options' : 'Add to cart'}</span>
                         </button>
                     ) : (
-                        <WhatsAppButton href={whatsappUrl} className="h-12 px-5">
+                        <WhatsAppButton href={enquiryUrl} className="h-12 px-5">
                             Enquire
                         </WhatsAppButton>
                     )}

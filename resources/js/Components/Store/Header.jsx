@@ -3,6 +3,7 @@ import { ChevronDown, Menu, Phone, Search, ShoppingCart, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { WhatsAppIcon } from '@/Components/Icons';
 import useHideOnScroll from '@/hooks/useHideOnScroll';
+import useTheme from '@/hooks/useTheme';
 import { openCart } from '@/lib/cart';
 import SearchForm from './SearchForm';
 import SmartLink from './SmartLink';
@@ -105,7 +106,23 @@ function isActive(url, href) {
     return href === '/' ? path === '/' : path === href || path.startsWith(href + '/');
 }
 
-function CategoriesDropdown({ categories, active }) {
+/** Main menu links for the centred and marketplace headers. */
+function NavLinks({ links, store, url, linkClass, activeClass, skipDropdown = false, plain = false }) {
+    return links.map((l) => {
+        if (l.dropdown) {
+            if (skipDropdown) return null;
+            if (store?.categories?.length) return <CategoriesDropdown key={l.href} categories={store.categories} active={isActive(url, l.href)} className={`flex items-center gap-1 ${linkClass} ${isActive(url, l.href) ? 'text-stone-900' : 'text-stone-600 hover:text-stone-900'}`} />;
+        }
+        const on = isActive(url, l.href);
+        return (
+            <Link key={l.href} href={l.href} className={`${linkClass} transition-colors ${plain ? (on ? activeClass : '') : on ? 'text-stone-900' : 'text-stone-600 hover:text-stone-900'}`}>
+                {l.label}
+            </Link>
+        );
+    });
+}
+
+function CategoriesDropdown({ categories, active, label = 'Categories', className }) {
     const [open, setOpen] = useState(false);
     const ref = useRef(null);
 
@@ -121,12 +138,12 @@ function CategoriesDropdown({ categories, active }) {
                 type="button"
                 onClick={() => setOpen((o) => !o)}
                 aria-expanded={open}
-                className={`flex items-center gap-1 rounded-full px-3 py-2 text-sm font-medium transition-colors hover:text-stone-900 ${active ? 'text-stone-900' : 'text-stone-600'}`}
+                className={className || `flex items-center gap-1 rounded-full px-3 py-2 text-sm font-medium transition-colors hover:text-stone-900 ${active ? 'text-stone-900' : 'text-stone-600'}`}
             >
-                Categories <ChevronDown size={15} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+                {label} <ChevronDown size={15} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
             </button>
             {open && (
-                <div className="absolute top-full left-1/2 z-50 w-64 -translate-x-1/2 pt-2">
+                <div className={`absolute top-full z-50 w-64 pt-2 ${className ? 'left-0' : 'left-1/2 -translate-x-1/2'}`}>
                     <div className="rounded-2xl border border-stone-200 bg-white p-2 shadow-xl shadow-stone-900/10">
                         {categories.map((c) => (
                             <Link key={c.url} href={c.url} onClick={() => setOpen(false)} className="block rounded-xl px-3 py-2 text-sm text-stone-700 hover:bg-stone-100 hover:text-stone-900">
@@ -229,14 +246,114 @@ export default function Header() {
         return () => document.documentElement.removeAttribute('data-header-hidden');
     }, [hidden]);
 
+    const theme = useTheme();
+    const navProps = { links, store, url };
+    const searchToggle = (
+        <button type="button" onClick={() => setSearchOpen((o) => !o)} className="rounded-full p-2.5 text-stone-700 transition hover:bg-stone-100 active:scale-90" aria-label="Search products" aria-expanded={searchOpen}>
+            {searchOpen ? <X size={20} /> : <Search size={20} />}
+        </button>
+    );
+    const menuButton = (
+        <button type="button" onClick={() => setMenuOpen(true)} className="rounded-full p-2.5 text-stone-700 transition hover:bg-stone-100 active:scale-90 lg:hidden" aria-label="Open menu">
+            <Menu size={22} />
+        </button>
+    );
+    const shell = `sticky top-0 z-40 border-b bg-white/90 backdrop-blur-md backdrop-saturate-150 transition-[transform,box-shadow,border-color] duration-300 ease-[cubic-bezier(.22,.61,.36,1)] ${
+        scrolled ? 'border-stone-200/40 shadow-[0_6px_24px_-14px_rgba(28,25,23,0.25)]' : 'border-stone-200/70'
+    } ${hidden ? 'max-lg:-translate-y-full max-lg:shadow-none' : ''}`;
+    const searchPanel = searchOpen && (
+        <div className="border-t border-stone-100 bg-white">
+            <div className="container-page py-3">
+                <SearchForm initial={currentSearch} autoFocus onDone={() => setSearchOpen(false)} className="mx-auto max-w-2xl" />
+            </div>
+        </div>
+    );
+
+    if (theme.header === 'centered') {
+        return (
+            <>
+                <AnnouncementBar announcement={store?.announcement} />
+                <header className={shell}>
+                    <div className="container-page grid h-16 grid-cols-[1fr_auto_1fr] items-center gap-2 lg:h-20">
+                        <div className="flex items-center gap-1">
+                            {menuButton}
+                            <span className="hidden lg:block">{searchToggle}</span>
+                        </div>
+                        <Logo className="justify-self-center" />
+                        <div className="flex items-center justify-end gap-1">
+                            <span className="lg:hidden">{searchToggle}</span>
+                            {store?.whatsapp_url && (
+                                <a href={store.whatsapp_url} target="_blank" rel="noopener noreferrer" className="hidden rounded-full p-2.5 text-stone-700 transition hover:bg-stone-100 sm:inline-flex" aria-label="Chat on WhatsApp">
+                                    <WhatsAppIcon size={20} />
+                                </a>
+                            )}
+                            <CartLink />
+                        </div>
+                    </div>
+                    {/* Desktop: the menu on its own row, centred under the logo. */}
+                    <nav className="hidden border-t border-stone-100 lg:block" aria-label="Main">
+                        <div className="container-page flex h-11 items-center justify-center gap-6">
+                            <NavLinks {...navProps} linkClass="text-[13px] font-medium tracking-[0.12em] uppercase" />
+                        </div>
+                    </nav>
+                    {searchPanel}
+                </header>
+                <MobileMenu open={menuOpen} onClose={closeMenu} links={links} />
+            </>
+        );
+    }
+
+    if (theme.header === 'marketplace') {
+        return (
+            <>
+                <AnnouncementBar announcement={store?.announcement} />
+                <header className={shell}>
+                    <div className="container-page flex h-16 items-center gap-3 lg:h-20 lg:gap-8">
+                        <Logo />
+                        {/* Desktop: search is always visible — busy shops are browsed by searching. */}
+                        <SearchForm initial={currentSearch} className="hidden max-w-2xl flex-1 lg:block" />
+                        <div className="ml-auto flex items-center gap-1">
+                            {store?.phone && (
+                                <a href={`tel:${store.phone.replace(/[^\d+]/g, '')}`} className="mr-2 hidden items-center gap-2 text-sm xl:flex">
+                                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-surface text-accent">
+                                        <Phone size={16} />
+                                    </span>
+                                    <span className="leading-tight">
+                                        <span className="block text-[11px] text-stone-500">Call or WhatsApp</span>
+                                        <span className="font-semibold text-stone-900">{store.phone}</span>
+                                    </span>
+                                </a>
+                            )}
+                            <span className="lg:hidden">{searchToggle}</span>
+                            <CartLink />
+                            {menuButton}
+                        </div>
+                    </div>
+                    {/* Desktop: a coloured category row. */}
+                    <nav className="hidden bg-brand text-on-brand lg:block" aria-label="Main">
+                        <div className="container-page flex h-11 items-center gap-1">
+                            {store?.categories?.length > 0 && (
+                                <CategoriesDropdown categories={store.categories} label="All categories" className="mr-3 flex h-11 items-center gap-2 bg-black/15 px-4 text-sm font-semibold" />
+                            )}
+                            <NavLinks {...navProps} skipDropdown linkClass="rounded-md px-3 py-1.5 text-sm font-medium opacity-90 hover:bg-white/10 hover:opacity-100" activeClass="bg-white/15 opacity-100" plain />
+                            {store?.categories?.slice(0, 4).map((c) => (
+                                <Link key={c.url} href={c.url} className="hidden rounded-md px-3 py-1.5 text-sm opacity-80 hover:bg-white/10 hover:opacity-100 xl:block">
+                                    {c.name}
+                                </Link>
+                            ))}
+                        </div>
+                    </nav>
+                    {searchPanel}
+                </header>
+                <MobileMenu open={menuOpen} onClose={closeMenu} links={links} />
+            </>
+        );
+    }
+
     return (
         <>
             <AnnouncementBar announcement={store?.announcement} />
-            <header
-                className={`sticky top-0 z-40 border-b bg-white/90 backdrop-blur-md backdrop-saturate-150 transition-[transform,box-shadow,border-color] duration-300 ease-[cubic-bezier(.22,.61,.36,1)] ${
-                    scrolled ? 'border-stone-200/40 shadow-[0_6px_24px_-14px_rgba(28,25,23,0.25)]' : 'border-stone-200/70'
-                } ${hidden ? 'max-lg:-translate-y-full max-lg:shadow-none' : ''}`}
-            >
+            <header className={shell}>
                 <div className="container-page flex h-16 items-center gap-4 lg:h-[72px]">
                     <Logo />
 

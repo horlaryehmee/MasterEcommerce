@@ -19,13 +19,14 @@ function Line({ item, highlight }) {
                     <Link href={item.url} className="line-clamp-2 text-sm leading-snug font-medium text-stone-900 hover:underline">
                         {item.name}
                     </Link>
-                    <button type="button" onClick={() => updateCartItem(item.id, 0, opts)} disabled={busy} className="-mt-1 -mr-1 shrink-0 rounded-full p-1.5 text-stone-400 hover:bg-red-50 hover:text-red-600" aria-label={`Remove ${item.name}`}>
+                    <button type="button" onClick={() => updateCartItem(item.key, 0, opts)} disabled={busy} className="-mt-1 -mr-1 shrink-0 rounded-full p-1.5 text-stone-400 hover:bg-red-50 hover:text-red-600" aria-label={`Remove ${item.name}`}>
                         <Trash2 size={15} />
                     </button>
                 </div>
+                {item.variant && <p className="mt-0.5 text-xs font-medium text-stone-700">{item.variant}</p>}
                 <p className="mt-0.5 text-xs text-stone-500">{item.unit_price}</p>
                 <div className="mt-auto flex items-center justify-between pt-2">
-                    <QuantityStepper value={item.quantity} onChange={(q) => updateCartItem(item.id, q, opts)} size="sm" disabled={busy} label={`Quantity of ${item.name}`} />
+                    <QuantityStepper value={item.quantity} onChange={(q) => updateCartItem(item.key, q, opts)} size="sm" disabled={busy} label={`Quantity of ${item.name}`} />
                     <span className="text-sm font-semibold text-stone-900">{item.line_total}</span>
                 </div>
             </div>
@@ -106,7 +107,8 @@ export default function CartDrawer() {
                     <p className="flex shrink-0 items-center gap-2 bg-emerald-50 px-5 py-2.5 text-sm text-emerald-900" role="status">
                         <CheckCircle2 size={17} className="shrink-0 text-emerald-600" />
                         <span className="min-w-0 truncate">
-                            <strong className="font-semibold">{justAdded.name}</strong> added
+                            <strong className="font-semibold">{justAdded.name}</strong>
+                            {justAdded.variant && ` (${justAdded.variant})`} added
                         </span>
                     </p>
                 )}
@@ -144,7 +146,7 @@ export default function CartDrawer() {
 
                         <ul className="flex-1 space-y-1 overflow-y-auto overscroll-contain px-3 py-3">
                             {cart.items.map((item) => (
-                                <Line key={item.id} item={item} highlight={justAdded?.id === item.id} />
+                                <Line key={item.key} item={item} highlight={(justAdded?.line ?? String(justAdded?.id)) === item.key} />
                             ))}
                         </ul>
 

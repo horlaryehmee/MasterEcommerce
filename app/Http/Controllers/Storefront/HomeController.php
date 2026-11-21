@@ -19,12 +19,15 @@ class HomeController extends StorefrontController
 
         return $this->page('Storefront/Home', [
             'hero' => $this->hero($home),
+            'marquee' => $this->marquee($home),
             'categories' => $this->categories($home),
             'featured' => $this->featured($home),
             'newArrivals' => $this->newArrivals($home),
             'promo' => $this->promo($home),
             'about' => $this->about($home),
             'why' => $this->why($home),
+            // Section order comes from the template (Admin → Templates).
+            'order' => \App\Support\Themes::layout()['home'],
         ], Seo::make()->home());
     }
 
@@ -84,7 +87,30 @@ class HomeController extends StorefrontController
                 'desktop_height' => array_key_exists($h->hero_desktop_height, HomepageSetting::DESKTOP_HEIGHTS) ? $h->hero_desktop_height : 'standard',
                 'mobile_height' => array_key_exists($h->hero_mobile_height, HomepageSetting::MOBILE_HEIGHTS) ? $h->hero_mobile_height : 'portrait',
                 'mobile_text' => $h->hero_mobile_text === 'overlay' ? 'overlay' : 'below',
+                'dots' => array_key_exists($h->hero_dots_position, HomepageSetting::DOTS_POSITIONS) ? $h->hero_dots_position : 'center',
+                'shade' => array_key_exists($h->hero_shade, HomepageSetting::SHADES) ? $h->hero_shade : 'strong',
             ],
+        ];
+    }
+
+    /** The scrolling text strip under the hero. */
+    protected function marquee(HomepageSetting $h): ?array
+    {
+        $items = collect($h->marquee_items ?? [])->filter(fn ($t) => filled($t))->values();
+        if (! $h->marquee_enabled || $items->isEmpty()) {
+            return null;
+        }
+
+        return [
+            'items' => $items->all(),
+            'separator' => $h->marquee_separator,
+            'bg' => $h->marquee_bg_color,
+            'color' => $h->marquee_text_color,
+            // Separators and borders; the brand accent when not set.
+            'accent' => $h->marquee_accent_color,
+            'border' => $h->marquee_border,
+            'uppercase' => $h->marquee_uppercase,
+            'speed' => array_key_exists($h->marquee_speed, HomepageSetting::MARQUEE_SPEEDS) ? $h->marquee_speed : 'normal',
         ];
     }
 

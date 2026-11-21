@@ -7,6 +7,7 @@ use App\Http\Requests\Admin\ProductRequest;
 use App\Models\Category;
 use App\Models\Product;
 use App\Models\ProductImage;
+use App\Models\ProductVariant;
 use App\Services\ImageStorage;
 use App\Support\Media;
 use App\Support\Money;
@@ -35,6 +36,7 @@ class ProductController extends Controller
 
         $products = Product::query()
             ->with(['primaryImage', 'category:id,name'])
+            ->withCount('variants')
             ->search($filters['search'])
             ->when($filters['status'], fn ($q, $s) => $q->where('status', $s))
             ->when($filters['category'], fn ($q, $c) => $q->where('category_id', $c))
@@ -47,8 +49,9 @@ class ProductController extends Controller
                 'name' => $p->name,
                 'slug' => $p->slug,
                 'url' => $p->url(),
-                'price' => Money::format($p->price),
-                'compare_at_price' => $p->hasDiscount() ? Money::format($p->compare_at_price) : null,
+                'price' => $p->hasPriceRange() ? Money::format($p->price).' – '.Money::format($p->price_max) : Money::format($p->price),
+                'compare_at_price' => $p->hasDiscount() && ! $p->hasPriceRange() ? Money::format($p->compare_at_price) : null,
+                'variants_count' => $p->has_variants ? $p->variants_count : 0,
                 'status' => $p->status,
                 'availability' => Product::AVAILABILITY[$p->availability] ?? $p->availability,
                 'is_featured' => $p->is_featured,
@@ -80,7 +83,7 @@ class ProductController extends Controller
             $product = new Product($this->attributes($request));
             $product->slug = Slug::unique(Product::class, $request->input('slug') ?: $request->input('name'));
             $product->save();
-            $this->syncImages($product, $request);
+            $this->syncVariants($product, $request, $this->syncImages($product, $request));
 
             return $product;
         });
@@ -90,7 +93,7 @@ class ProductController extends Controller
 
     public function edit(Product $product): Response
     {
-        return Inertia::render('Admin/Products/Form', $this->formProps($product->load('images')));
+        return Inertia::render('Admin/Products/Form', $this->formProps($product->load(['images', 'variants'])));
     }
 
     public function update(ProductRequest $request, Product $product): RedirectResponse
@@ -99,7 +102,7 @@ class ProductController extends Controller
             $product->fill($this->attributes($request));
             $product->slug = Slug::unique(Product::class, $request->input('slug') ?: $request->input('name'), $product->id);
             $product->save();
-            $this->syncImages($product, $request);
+            $this->syncVariants($product, $request, $this->syncImages($product, $request));
         });
 
         return back()->with('success', $this->savedMessage('Product saved.'));
@@ -134,14 +137,90 @@ class ProductController extends Controller
 
     protected function attributes(ProductRequest $request): array
     {
-        return $request->safe()->only([
+        $data = $request->safe()->only([
             'name', 'short_description', 'description', 'price', 'compare_at_price', 'category_id',
             'availability', 'status', 'is_featured', 'is_new_arrival', 'seo_title', 'seo_description',
         ]);
+
+        // Variable products: price and availability come from the variants (worked out after saving them).
+        if ($request->hasOptions()) {
+            $data['price'] = collect($request->input('variants'))->min(fn ($v) => (float) $v['price']) ?? 0;
+            $data['compare_at_price'] = null;
+            $data['availability'] ??= 'in_stock';
+        }
+
+        return $data;
     }
 
-    /** Remove, add and choose the primary image according to the submitted form. */
-    protected function syncImages(Product $product, ProductRequest $request): void
+    /**
+     * Save the product's options and variants. Existing variants are matched by
+     * id (or, failing that, by their combination of values), so editing keeps
+     * their history on past orders; variants no longer listed are deleted.
+     *
+     * @param  array<int, ProductImage>  $newImages  images uploaded in this request, by upload index
+     */
+    protected function syncVariants(Product $product, ProductRequest $request, array $newImages): void
+    {
+        if (! $request->hasOptions()) {
+            $product->variants()->delete();
+            $product->forceFill(['options' => null, 'has_variants' => false, 'price_max' => null])->save();
+
+            return;
+        }
+
+        $options = $request->validated('options');
+        $product->forceFill(['options' => $options, 'has_variants' => true])->save();
+
+        // Canonical spelling of each value as written in the options.
+        $canonical = collect($options)->map(fn ($o) => collect($o['values'])->mapWithKeys(fn ($v) => [mb_strtolower($v['label']) => $v['label']])->all())->all();
+        $comboKey = fn (array $values) => mb_strtolower(implode("\x1f", $values));
+
+        $existing = $product->variants()->get();
+        $byId = $existing->keyBy('id');
+        $byCombo = $existing->keyBy(fn (ProductVariant $v) => $comboKey($v->values()));
+        $imageIds = $product->images()->pluck('id')->all();
+        $keep = [];
+
+        foreach ($request->validated('variants') as $i => $row) {
+            $values = array_map(fn ($v, $o) => $canonical[$o][mb_strtolower($v)] ?? $v, $row['values'], array_keys($row['values']));
+            $variant = ($row['id'] ? $byId->get((int) $row['id']) : null) ?? $byCombo->get($comboKey($values)) ?? new ProductVariant;
+            if (in_array($variant->id, $keep, true)) {
+                $variant = new ProductVariant;
+            }
+
+            [$type, $ref] = array_pad(explode(':', (string) $row['image']), 2, null);
+            $imageId = match ($type) {
+                'new' => ($newImages[(int) $ref] ?? null)?->id,
+                'existing' => in_array((int) $ref, $imageIds, true) ? (int) $ref : null,
+                default => null,
+            };
+
+            $variant->fill([
+                'option1' => $values[0] ?? null,
+                'option2' => $values[1] ?? null,
+                'option3' => $values[2] ?? null,
+                'price' => $row['price'],
+                'compare_at_price' => $row['compare_at_price'],
+                'sku' => $row['sku'],
+                'availability' => $row['availability'],
+                'product_image_id' => $imageId,
+                'is_enabled' => $row['is_enabled'],
+                'sort_order' => $i,
+            ]);
+            $product->variants()->save($variant);
+            $keep[] = $variant->id;
+        }
+
+        $product->variants()->whereNotIn('id', $keep)->delete();
+        $product->syncFromVariants();
+    }
+
+    /**
+     * Remove, add and choose the primary image according to the submitted form.
+     *
+     * @return array<int, ProductImage> the uploaded images, by upload index
+     */
+    protected function syncImages(Product $product, ProductRequest $request): array
     {
         $removeIds = array_map('intval', $request->input('remove_images', []));
         $removed = $product->images()->whereIn('id', $removeIds)->get();
@@ -180,6 +259,8 @@ class ProductController extends Controller
 
         $product->images()->update(['is_primary' => false]);
         $primary?->update(['is_primary' => true]);
+
+        return $newImages;
     }
 
     protected function formProps(Product $product): array
@@ -201,6 +282,17 @@ class ProductController extends Controller
                 'is_new_arrival' => $product->is_new_arrival,
                 'seo_title' => $product->seo_title,
                 'seo_description' => $product->seo_description,
+                'options' => $product->optionList(),
+                'variants' => $product->has_variants ? $product->variants->map(fn (ProductVariant $v) => [
+                    'id' => $v->id,
+                    'values' => $v->values(),
+                    'price' => $v->price,
+                    'compare_at_price' => $v->compare_at_price,
+                    'sku' => $v->sku,
+                    'availability' => $v->availability,
+                    'image' => $v->product_image_id ? 'existing:'.$v->product_image_id : '',
+                    'is_enabled' => $v->is_enabled,
+                ])->values() : [],
                 'images' => $product->images->map(fn (ProductImage $i) => [
                     'id' => $i->id,
                     'url' => Media::url($i->path, 'sm'),
@@ -215,6 +307,7 @@ class ProductController extends Controller
             'statuses' => Product::STATUSES,
             'maxImages' => config('catalog.max_product_images'),
             'maxUploadMb' => round(config('catalog.max_upload_kb') / 1024),
+            'maxVariants' => ProductRequest::MAX_VARIANTS,
         ];
     }
 }

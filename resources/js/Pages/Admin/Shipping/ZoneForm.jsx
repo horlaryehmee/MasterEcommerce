@@ -5,6 +5,9 @@ import MultiSelect from '@/Components/Admin/MultiSelect';
 import { Button, Card, ConfirmModal, FormActions, PageHeader, Select, TextInput, Textarea, Toggle } from '@/Components/Admin/ui';
 import AdminLayout from '@/Layouts/AdminLayout';
 
+const NEEDS_MINIMUM = ['min_amount', 'either', 'both'];
+const NEEDS_COUPON = ['coupon', 'either', 'both'];
+
 const TYPE_ICONS = { flat_rate: Truck, free_shipping: Package, local_pickup: Store };
 const DEFAULT_TITLES = { flat_rate: 'Standard delivery', free_shipping: 'Free delivery', local_pickup: 'Pickup in store' };
 
@@ -35,7 +38,8 @@ function MethodEditor({ method, index, count, errors, symbol, onChange, onRemove
                     <span className="block text-xs text-zinc-500">
                         {{ flat_rate: 'Flat rate', free_shipping: 'Free shipping', local_pickup: 'Local pickup' }[method.type]}
                         {method.type === 'flat_rate' && method.cost !== '' && ` · ${symbol}${Number(method.cost).toLocaleString()}`}
-                        {method.type === 'free_shipping' && method.requires === 'min_amount' && method.min_amount !== '' && ` · over ${symbol}${Number(method.min_amount).toLocaleString()}`}
+                        {method.type === 'free_shipping' && NEEDS_MINIMUM.includes(method.requires) && method.min_amount !== '' && ` · over ${symbol}${Number(method.min_amount).toLocaleString()}`}
+                        {method.type === 'free_shipping' && NEEDS_COUPON.includes(method.requires) && ' · with a coupon'}
                     </span>
                 </button>
                 <span className="hidden text-xs text-zinc-400 sm:inline">{open ? 'Hide' : 'Edit'}</span>
@@ -66,11 +70,15 @@ function MethodEditor({ method, index, count, errors, symbol, onChange, onRemove
                                 label="Free shipping requires"
                                 options={[
                                     { value: 'none', label: 'Nothing (always free)' },
+                                    { value: 'coupon', label: 'A valid free shipping coupon' },
                                     { value: 'min_amount', label: 'A minimum order amount' },
+                                    { value: 'either', label: 'A minimum order amount OR a coupon' },
+                                    { value: 'both', label: 'A minimum order amount AND a coupon' },
                                 ]}
+                                help={NEEDS_COUPON.includes(method.requires) ? 'Turn on “Allow free shipping” in a coupon to unlock this.' : undefined}
                                 {...field('requires')}
                             />
-                            {method.requires === 'min_amount' && <TextInput label="Minimum order amount" type="number" min="0" step="any" inputMode="decimal" prefix={prefix} help="Hidden until the cart subtotal reaches this." {...field('min_amount')} />}
+                            {NEEDS_MINIMUM.includes(method.requires) && <TextInput label="Minimum order amount" type="number" min="0" step="any" inputMode="decimal" prefix={prefix} help="Compared with the cart total after coupon discounts." {...field('min_amount')} />}
                         </div>
                     )}
 

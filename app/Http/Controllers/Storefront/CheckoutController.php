@@ -2,9 +2,12 @@
 
 namespace App\Http\Controllers\Storefront;
 
+use App\Exceptions\CouponException;
 use App\Models\BusinessSetting;
+use App\Models\Coupon;
 use App\Models\Order;
 use App\Services\Cart;
+use App\Services\Coupons;
 use App\Services\OrderMailer;
 use App\Services\Shipping;
 use App\Services\Stats\Collector;
@@ -33,9 +36,15 @@ class CheckoutController extends StorefrontController
         $countries = $this->shipping->allowedCountries($s);
         $default = $this->shipping->defaultCountry($s);
 
+        $coupon = $this->cart->coupon();
+
         return $this->page('Storefront/Checkout', [
             'items' => $this->cart->toArray(),
             'subtotal' => $this->cart->subtotal(),
+            'discount' => $this->cart->discount(),
+            'coupon' => $coupon ? Cart::couponArray($coupon, $s) : null,
+            'couponsEnabled' => $coupon !== null || Coupons::enabled(),
+            'couponNotice' => $this->cart->takeCouponNotice(),
             'countries' => collect($countries)->map(fn ($name, $code) => ['code' => $code, 'name' => $name])->values(),
             // Dropdown states for the allowed countries that have them.
             'states' => collect($countries)->keys()->mapWithKeys(fn ($c) => [$c => Shipping::states($c)])->filter()->all(),
@@ -44,7 +53,7 @@ class CheckoutController extends StorefrontController
             'initialRates' => $this->publicRates($this->ratesFor($default, null, null)),
             'paymentMethods' => collect($s->paymentMethods())->map(fn ($label, $key) => ['value' => $key, 'label' => $label])->values(),
             'money' => $s->moneyFormat(),
-            'track' => [Tracking::beginCheckout($this->cart->lines(), $this->cart->subtotal())],
+            'track' => [Tracking::beginCheckout($this->cart->lines(), $this->cart->total(), $coupon['coupon']->code ?? null)],
         ], Seo::make()->title('Checkout')->noindex());
     }
 
@@ -108,6 +117,12 @@ class CheckoutController extends StorefrontController
             'customer_email' => 'email',
         ]);
 
+        // The coupon may have stopped applying since the page loaded (expired, used up…).
+        // Don't quietly charge the full price: say so and let the customer decide.
+        if ($this->cart->couponCode() && ! $this->cart->coupon()) {
+            throw ValidationException::withMessages(['coupon' => $this->cart->takeCouponNotice() ?? 'Your coupon can no longer be used.']);
+        }
+
         if ($configured && ! $rate) {
             throw ValidationException::withMessages(['shipping_method' => $rates->isEmpty()
                 ? 'Sorry, we don’t deliver to this address yet. Check your country and state, or message us.'
@@ -116,8 +131,25 @@ class CheckoutController extends StorefrontController
 
         $subtotal = $this->cart->subtotal();
         $fee = $rate['cost'] ?? 0.0;
+        $couponId = $this->cart->coupon()['coupon']->id ?? null;
 
-        $order = DB::transaction(function () use ($data, $rate, $pickup, $states, $subtotal, $fee, $lines, $s) {
+        $order = DB::transaction(function () use ($data, $rate, $pickup, $states, $subtotal, $fee, $lines, $s, $couponId) {
+            // Lock the coupon so two orders can't both take its last use, then check it
+            // again with the customer's details (allowed emails, uses per customer).
+            $applied = null;
+            if ($couponId) {
+                $coupon = Coupon::query()->lockForUpdate()->find($couponId);
+                try {
+                    $applied = $coupon ? app(Coupons::class)->apply($coupon, $lines, [
+                        'email' => $data['customer_email'] ?? null,
+                        'phone' => $data['customer_phone'],
+                    ]) : throw new CouponException('This coupon is not valid.');
+                } catch (CouponException $e) {
+                    throw ValidationException::withMessages(['coupon' => $e->getMessage()]);
+                }
+            }
+            $discount = $applied['discount'] ?? 0.0;
+
             $order = Order::query()->create([
                 'customer_name' => $data['customer_name'],
                 'customer_phone' => $data['customer_phone'],
@@ -136,19 +168,26 @@ class CheckoutController extends StorefrontController
                 'notes' => $data['notes'] ?? null,
                 'payment_method' => $data['payment_method'],
                 'subtotal' => $subtotal,
+                'coupon_id' => $applied['coupon']->id ?? null,
+                'coupon_code' => $applied['coupon']->code ?? null,
+                'discount_total' => $discount,
                 'delivery_fee' => $fee,
-                'total' => round($subtotal + $fee, 2),
+                'total' => round(max(0, $subtotal - $discount) + $fee, 2),
                 'currency_code' => $s->currency_code,
             ]);
 
             $order->items()->createMany($lines->map(fn (array $l) => [
                 'product_id' => $l['product']->id,
+                'product_variant_id' => $l['variant']?->id,
                 'product_name' => $l['product']->name,
+                'variant_label' => $l['variant']?->label(),
+                'sku' => $l['variant']?->sku,
                 'product_slug' => $l['product']->slug,
-                'image_path' => $l['product']->primaryImage?->path,
-                'unit_price' => $l['product']->price,
+                'image_path' => ($l['variant']?->image ?? $l['product']->primaryImage)?->path,
+                'unit_price' => $l['unit_price'],
                 'quantity' => $l['quantity'],
                 'line_total' => $l['line_total'],
+                'discount' => $applied['lines'][$l['key']] ?? 0,
             ])->all());
 
             return $order;
@@ -169,7 +208,7 @@ class CheckoutController extends StorefrontController
             return collect();
         }
 
-        return $this->shipping->rates($country, $state, $postcode, $this->cart->subtotal(), $this->cart->count());
+        return $this->shipping->rates($country, $state, $postcode, $this->cart->total(), $this->cart->count(), $this->cart->hasFreeShippingCoupon());
     }
 
     protected function publicRates(Collection $rates): array

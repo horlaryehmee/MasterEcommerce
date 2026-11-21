@@ -83,6 +83,12 @@ export default function OrderShow({ order, statuses, paymentStatuses, customerWh
                                         ) : (
                                             <span className="line-clamp-2 text-sm font-medium text-zinc-900">{i.name}</span>
                                         )}
+                                        {i.variant && (
+                                            <span className="block text-xs font-medium text-zinc-700">
+                                                {i.variant}
+                                                {i.sku && <span className="font-normal text-zinc-500"> · SKU {i.sku}</span>}
+                                            </span>
+                                        )}
                                         <span className="text-xs text-zinc-500">
                                             {i.quantity} × {i.unit_price}
                                         </span>
@@ -93,6 +99,11 @@ export default function OrderShow({ order, statuses, paymentStatuses, customerWh
                         </ul>
                         <dl className="border-t border-zinc-100 px-5 py-3">
                             <Row label="Subtotal">{order.subtotal}</Row>
+                            {order.coupon_code && (
+                                <Row label={`Coupon · ${order.coupon_code}`}>
+                                    <span className="text-emerald-700">{order.discount ? `−${order.discount}` : 'Applied'}</span>
+                                </Row>
+                            )}
                             <Row label={order.shipping_method || 'Delivery'}>{order.shipping_cost === 'To be confirmed' ? 'To be agreed' : order.shipping_cost}</Row>
                             <div className="mt-1 flex justify-between border-t border-zinc-100 pt-2.5 text-base font-semibold">
                                 <dt>Total</dt>

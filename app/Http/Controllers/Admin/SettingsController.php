@@ -11,6 +11,7 @@ use App\Models\Product;
 use App\Models\SocialLink;
 use App\Services\ImageStorage;
 use App\Services\Shipping;
+use App\Support\Fonts;
 use App\Support\MailSettings;
 use App\Support\Media;
 use App\Support\Money;
@@ -116,6 +117,12 @@ class SettingsController extends Controller
                 'methods' => $z->methods->map(fn (ShippingMethod $m) => ['title' => $m->title, 'summary' => $m->summary(), 'enabled' => $m->is_enabled])->values(),
             ]),
             'hasWhatsapp' => WhatsApp::normalize($s->whatsapp_number) !== null,
+            'fonts' => [
+                'default' => Fonts::DEFAULT,
+                'families' => Fonts::options(),
+                'weights' => collect(Fonts::HEADING_WEIGHTS)->map(fn ($label, $value) => ['value' => $value, 'label' => $label])->values(),
+                'buttonShapes' => collect(Fonts::BUTTON_SHAPES)->map(fn ($label, $value) => ['value' => $value, 'label' => $label])->values(),
+            ],
             'cardStyles' => collect(BusinessSetting::CARD_STYLES)->map(fn ($c, $key) => ['value' => $key, 'label' => $c[0], 'description' => $c[1]])->values(),
             // A real product for the card previews (a discounted one shows the most).
             'sampleProduct' => fn () => Product::query()->visible()->with(['primaryImage', 'category:id,name'])
@@ -206,6 +213,13 @@ class SettingsController extends Controller
         if ($section === 'branding') {
             foreach (['primary_color', 'secondary_color', 'accent_color'] as $key) {
                 $data[$key] = strtoupper($data[$key]);
+            }
+            foreach (['heading_font', 'body_font'] as $key) {
+                if (array_key_exists($key, $data)) {
+                    // Tidy the spacing of a typed name; the built-in font is stored as "none chosen".
+                    $name = preg_replace('/\s+/', ' ', trim((string) $data[$key]));
+                    $data[$key] = Fonts::isDefault($name) ? null : $name;
+                }
             }
         }
 
@@ -416,6 +430,11 @@ If you can read this, your website can send emails: you'll get an email for ever
                 'secondary_color' => $hex,
                 'accent_color' => $hex,
                 'product_card_style' => ['sometimes', 'required', Rule::in(array_keys(BusinessSetting::CARD_STYLES))],
+                // Any Google Fonts family; the name goes into CSS and a URL, so only letters, digits and spaces.
+                'heading_font' => ['nullable', 'string', 'max:60', 'regex:/^[A-Za-z0-9][A-Za-z0-9 ]{0,59}$/'],
+                'body_font' => ['nullable', 'string', 'max:60', 'regex:/^[A-Za-z0-9][A-Za-z0-9 ]{0,59}$/'],
+                'heading_weight' => ['nullable', 'integer', Rule::in(array_keys(Fonts::HEADING_WEIGHTS))],
+                'button_shape' => ['sometimes', 'required', Rule::in(array_keys(Fonts::BUTTON_SHAPES))],
             ],
             'currency' => [
                 'currency_code' => ['required', 'string', 'size:3', 'alpha'],
@@ -481,6 +500,8 @@ If you can read this, your website can send emails: you'll get an email for ever
     protected function messages(): array
     {
         return [
+            'heading_font.regex' => 'Type the font name as it appears on Google Fonts, e.g. Cormorant Garamond.',
+            'body_font.regex' => 'Type the font name as it appears on Google Fonts, e.g. Lato.',
             'ga4_id.regex' => 'Use your GA4 Measurement ID, e.g. G-ABC123XYZ.',
             'gtm_id.regex' => 'Use your container ID, e.g. GTM-ABC1234.',
             'google_ads_id.regex' => 'Use your Google Ads tag ID, e.g. AW-123456789.',

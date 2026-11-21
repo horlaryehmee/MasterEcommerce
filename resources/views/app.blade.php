@@ -3,13 +3,19 @@
     use App\Support\Media;
 
     $settings = \App\Models\BusinessSetting::current();
+    // Storefront pages show a previewed template's colours and fonts (nothing is saved).
+    $storefront = ! request()->is('admin', 'admin/*');
+    if ($storefront) {
+        $settings = \App\Support\Themes::effectiveSettings($settings);
+    }
     $primary = Color::sanitize($settings->primary_color, '#111827');
     $secondary = Color::sanitize($settings->secondary_color, '#F4F1EC');
     $accent = Color::sanitize($settings->accent_color, '#C2410C');
     $favicon = Media::url($settings->favicon_path);
     // Storefront extras (verification, custom meta/code, pixels) never load in the admin.
-    $storefront = ! request()->is('admin', 'admin/*');
     $tracking = $storefront ? \App\Support\Tracking::config(request(), $settings) : [];
+    // Brand fonts and button shape apply to the storefront only; the admin keeps its own look.
+    $brand = $storefront ? \App\Support\Fonts::forSettings($settings) : ['stylesheet' => null, 'vars' => []];
 @endphp
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
@@ -63,8 +69,18 @@
         <link rel="apple-touch-icon" href="{{ $favicon }}">
     @endif
 
+    @if ($brand['stylesheet'])
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="{{ $brand['stylesheet'] }}">
+    @endif
+
     <style>
         :root {
+@foreach ($brand['vars'] as $name => $value)
+            {{-- Raw: font names are letters, digits and spaces only (App\Support\Fonts::validName). --}}
+            {{ $name }}: {!! $value !!};
+@endforeach
             --brand-primary: {{ $primary }};
             --brand-on-primary: {{ Color::contrast($primary) }};
             --brand-secondary: {{ $secondary }};
@@ -72,6 +88,9 @@
             --brand-accent: {{ $accent }};
             --brand-on-accent: {{ Color::contrast($accent) }};
         }
+@isset($brand['vars']['--brand-heading-weight'])
+        body:has(.store-shell) :is(h1, h2) { font-weight: var(--brand-heading-weight); }
+@endisset
     </style>
 
     @viteReactRefresh

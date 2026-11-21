@@ -6,8 +6,10 @@ import Img from './Img';
  * Product images in a native swipe track: the image follows the finger and
  * snaps into place. Dots on phones, thumbnails from small tablets up, arrows
  * (and arrow keys) for mouse and keyboard.
+ *
+ * `activeIndex` jumps to an image from outside (the chosen variation's photo).
  */
-export default function ProductGallery({ images, name }) {
+export default function ProductGallery({ images, name, activeIndex = null }) {
     const [index, setIndex] = useState(0);
     const track = useRef(null);
     const count = images.length;
@@ -30,6 +32,13 @@ export default function ProductGallery({ images, name }) {
             if (frame) cancelAnimationFrame(frame);
         };
     }, [count]);
+
+    useEffect(() => {
+        const el = track.current;
+        if (activeIndex === null || activeIndex === undefined || !el || activeIndex >= count) return;
+        el.scrollTo({ left: activeIndex * el.clientWidth, behavior: 'smooth' });
+        setIndex(activeIndex);
+    }, [activeIndex, count]);
 
     if (count === 0) {
         return (

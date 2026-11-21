@@ -7,15 +7,18 @@
 /*
  * Brand colours come from Admin → Settings → Branding and are injected as
  * CSS variables in resources/views/app.blade.php. The fallbacks below are
- * only used if those variables are missing.
+ * only used if those variables are missing. They sit in a layer so the page's
+ * own (unlayered) values always win, even though this file loads after them.
  */
-:root {
-    --brand-primary: #111827;
-    --brand-on-primary: #ffffff;
-    --brand-secondary: #f4f1ec;
-    --brand-on-secondary: #111111;
-    --brand-accent: #c2410c;
-    --brand-on-accent: #ffffff;
+@layer base {
+    :root {
+        --brand-primary: #111827;
+        --brand-on-primary: #ffffff;
+        --brand-secondary: #f4f1ec;
+        --brand-on-secondary: #111111;
+        --brand-accent: #c2410c;
+        --brand-on-accent: #ffffff;
+    }
 }
 
 @theme inline {
@@ -99,7 +102,7 @@
 }
 
 @utility btn {
-    @apply inline-flex h-11 items-center justify-center gap-2 rounded-full px-5 text-sm font-semibold whitespace-nowrap transition-[color,background-color,border-color,opacity,transform] duration-150 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60 disabled:active:scale-100;
+    @apply inline-flex h-11 items-center justify-center gap-2 rounded-[var(--btn-radius,9999px)] px-5 text-sm font-semibold whitespace-nowrap transition-[color,background-color,border-color,opacity,transform] duration-150 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60 disabled:active:scale-100;
 }
 
 @utility btn-primary {
@@ -182,3 +185,29 @@
         scroll-behavior: auto !important;
     }
 }
+
+/*
+ * Brand fonts (Website Settings → Branding), storefront only. The variables are
+ * set in resources/views/app.blade.php when a font other than the built-in one
+ * is chosen. Unlayered, so they win over Tailwind's utility classes; on <body>
+ * so drawers and sheets rendered outside the layout get them too.
+ */
+body:has(.store-shell) {
+    font-family: var(--brand-font-body, var(--font-sans));
+}
+body:has(.store-shell) :is(h1, h2, h3, .font-heading) {
+    font-family: var(--brand-font-heading, inherit);
+}
+
+/* Variant picker: a small shake pointing at an option the customer still has to choose. */
+@keyframes nudge {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-6px); }
+    75% { transform: translateX(6px); }
+}
+
+/* Atelier (fashion): crisp, square corners on the page's images and panels. Buttons follow Branding → Button shape. */
+.store-shell[data-theme='atelier'] main :is(.rounded-xl, .rounded-2xl, .rounded-3xl, .rounded-\[1\.5rem\], .rounded-\[2rem\]) {
+    border-radius: 2px;
+}
+

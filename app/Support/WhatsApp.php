@@ -83,10 +83,14 @@ class WhatsApp
 
         $lines = ["Hello {$settings->business_name}, I just placed order #{$order->number} on your website.", ''];
         foreach ($order->items as $item) {
-            $lines[] = "• {$item->quantity} × {$item->product_name} — {$money($item->line_total)}";
+            $name = $item->product_name.($item->variant_label ? " ({$item->variant_label})" : '');
+            $lines[] = "• {$item->quantity} × {$name} — {$money($item->line_total)}";
         }
         $lines[] = '';
         $lines[] = 'Subtotal: '.$money($order->subtotal);
+        if ($order->coupon_code) {
+            $lines[] = "Coupon ({$order->coupon_code}): ".($order->hasDiscount() ? '−'.$money($order->discount_total) : 'applied');
+        }
         $lines[] = ($order->shipping_method ?: 'Delivery').': '.$order->shippingCostLabel();
         $lines[] = 'Total: '.$money($order->total);
         $lines[] = '';

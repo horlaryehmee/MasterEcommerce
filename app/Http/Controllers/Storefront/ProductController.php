@@ -47,7 +47,7 @@ class ProductController extends StorefrontController
     public function show(Request $request, string $slug): Response
     {
         $product = Product::query()->where('slug', $slug)
-            ->with(['images', 'primaryImage', 'category'])
+            ->with(['images', 'primaryImage', 'category', 'variants'])
             ->firstOrFail();
 
         // Drafts and products in hidden categories are only visible to the logged-in admin (preview).

@@ -25,7 +25,7 @@ use RuntimeException;
 /** "Website Content": homepage sections, footer text and informational pages. */
 class ContentController extends Controller
 {
-    public const SECTIONS = ['announcement', 'hero', 'categories', 'featured', 'new_arrivals', 'promo', 'about', 'why', 'footer'];
+    public const SECTIONS = ['announcement', 'hero', 'marquee', 'categories', 'featured', 'new_arrivals', 'promo', 'about', 'why', 'footer'];
 
     /** Image fields per section: request field => settings column. */
     protected const IMAGES = [
@@ -44,11 +44,12 @@ class ContentController extends Controller
             'home' => [
                 ...collect($home->getAttributes())->except(['id', 'created_at', 'updated_at', 'why_items'])->all(),
                 ...$home->only([
-                    'announcement_enabled', 'hero_enabled', 'categories_enabled', 'featured_enabled',
+                    'announcement_enabled', 'marquee_enabled', 'marquee_border', 'marquee_uppercase', 'hero_enabled', 'categories_enabled', 'featured_enabled',
                     'new_arrivals_enabled', 'promo_enabled', 'about_enabled', 'why_enabled', 'new_arrivals_count',
                     'hero_autoplay', 'hero_interval',
                 ]),
                 'why_items' => $home->why_items ?? [],
+                'marquee_items' => $home->marquee_items ?? [],
                 'hero_image_url' => Media::url($home->hero_image_path, 'sm'),
                 'hero_mobile_image_url' => Media::url($home->hero_mobile_image_path, 'sm'),
                 'promo_image_url' => Media::url($home->promo_image_path, 'sm'),
@@ -77,6 +78,7 @@ class ContentController extends Controller
                     'updated_at' => $p->updated_at?->diffForHumans(),
                 ])->values(),
             'icons' => HomepageSetting::WHY_ICONS,
+            'marqueeSpeeds' => HomepageSetting::MARQUEE_SPEEDS,
             'slides' => HeroSlide::query()->ordered()->get()->map(fn (HeroSlide $s) => [
                 ...$s->only('id', 'eyebrow', 'heading', 'description', 'button_text', 'button_link', 'secondary_text', 'secondary_link', 'content_mode', 'link', 'text_position', 'text_theme', 'is_active'),
                 'desktop_image_url' => Media::url($s->desktop_image_path, 'sm'),
@@ -88,6 +90,8 @@ class ContentController extends Controller
                 'desktopHeights' => HomepageSetting::DESKTOP_HEIGHTS,
                 'mobileHeights' => HomepageSetting::MOBILE_HEIGHTS,
                 'mobileText' => HomepageSetting::MOBILE_TEXT,
+                'dotsPositions' => HomepageSetting::DOTS_POSITIONS,
+                'shades' => HomepageSetting::SHADES,
                 'positions' => HeroSlide::POSITIONS,
                 'themes' => HeroSlide::THEMES,
                 'modes' => HeroSlide::MODES,
@@ -101,7 +105,12 @@ class ContentController extends Controller
 
         $home = HomepageSetting::current();
         $enabledField = $section.'_enabled';
-        if (in_array($section, ['announcement', 'hero', 'categories', 'featured', 'new_arrivals', 'promo', 'about', 'why'], true)) {
+        if ($section === 'marquee') {
+            foreach (['marquee_border', 'marquee_uppercase'] as $flag) {
+                $request->merge([$flag => $request->boolean($flag)]);
+            }
+        }
+        if (in_array($section, ['announcement', 'hero', 'marquee', 'categories', 'featured', 'new_arrivals', 'promo', 'about', 'why'], true)) {
             $request->merge([$enabledField => $request->boolean($enabledField)]);
         }
         if ($section === 'hero' && $request->has('hero_autoplay')) {
@@ -160,6 +169,14 @@ class ContentController extends Controller
                 ->values()->all();
         }
 
+        if ($section === 'marquee') {
+            $data['marquee_items'] = collect($data['marquee_items'] ?? [])->map(fn ($t) => trim((string) $t))->filter()->values()->all();
+            $data['marquee_separator'] = trim((string) ($data['marquee_separator'] ?? ''));
+            $data['marquee_bg_color'] = Color::sanitize($data['marquee_bg_color'] ?? null, '#FFFFFF');
+            $data['marquee_text_color'] = Color::sanitize($data['marquee_text_color'] ?? null, '#111111');
+            $data['marquee_accent_color'] = Color::isHex($data['marquee_accent_color'] ?? null) ? strtoupper($data['marquee_accent_color']) : null;
+        }
+
         if ($section === 'announcement') {
             $data['announcement_bg_color'] = Color::sanitize($data['announcement_bg_color'] ?? null, '#111827');
             $data['announcement_text_color'] = Color::sanitize($data['announcement_text_color'] ?? null, '#FFFFFF');
@@ -194,6 +211,8 @@ class ContentController extends Controller
                 'hero_desktop_height' => ['sometimes', 'required', Rule::in(array_keys(HomepageSetting::DESKTOP_HEIGHTS))],
                 'hero_mobile_height' => ['sometimes', 'required', Rule::in(array_keys(HomepageSetting::MOBILE_HEIGHTS))],
                 'hero_mobile_text' => ['sometimes', 'required', Rule::in(array_keys(HomepageSetting::MOBILE_TEXT))],
+                'hero_dots_position' => ['sometimes', 'required', Rule::in(array_keys(HomepageSetting::DOTS_POSITIONS))],
+                'hero_shade' => ['sometimes', 'required', Rule::in(array_keys(HomepageSetting::SHADES))],
                 'hero_eyebrow' => ['nullable', 'string', 'max:80'],
                 // The heading is needed only when a device uses the split or banner design.
                 // (requiredIf is an "implicit" rule, so it also runs when the field is empty.)
@@ -215,6 +234,18 @@ class ContentController extends Controller
                 'remove_hero_image' => ['nullable', 'boolean'],
                 'hero_mobile_image' => $image,
                 'remove_hero_mobile_image' => ['nullable', 'boolean'],
+            ],
+            'marquee' => [
+                'marquee_enabled' => ['boolean'],
+                'marquee_items' => ['nullable', 'array', 'max:12'],
+                'marquee_items.*' => ['nullable', 'string', 'max:80'],
+                'marquee_separator' => ['nullable', 'string', 'max:8'],
+                'marquee_bg_color' => $hex,
+                'marquee_text_color' => $hex,
+                'marquee_accent_color' => $hex,
+                'marquee_border' => ['boolean'],
+                'marquee_uppercase' => ['boolean'],
+                'marquee_speed' => ['required', Rule::in(array_keys(HomepageSetting::MARQUEE_SPEEDS))],
             ],
             'categories' => [
                 'categories_enabled' => ['boolean'],
@@ -273,6 +304,8 @@ class ContentController extends Controller
     {
         return [
             'announcement_text' => 'announcement text',
+            'marquee_items' => 'messages',
+            'marquee_items.*' => 'message',
             'hero_heading' => 'heading',
             'hero_primary_link' => 'primary button link',
             'hero_secondary_link' => 'secondary button link',

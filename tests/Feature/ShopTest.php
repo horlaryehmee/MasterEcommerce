@@ -346,7 +346,7 @@ class ShopTest extends TestCase
         $this->actingAsAdmin();
         $this->product();
         $this->get('/admin/settings?tab=branding')->assertInertia(fn (Assert $page) => $page
-            ->has('cardStyles', 3)
+            ->has('cardStyles', count(BusinessSetting::CARD_STYLES))
             ->whereNot('sampleProduct', null));
 
         $colours = ['primary_color' => '#aa0000', 'secondary_color' => '#f4f1ec', 'accent_color' => '#c2410c'];

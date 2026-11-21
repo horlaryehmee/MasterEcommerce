@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { ArrowRightLeft, BadgeDollarSign, Building2, ChevronDown, ChevronRight, ChevronUp, Code2, ExternalLink, Mail as MailIcon, Palette, Pencil, Plus, Search as SearchIcon, Share2, ShoppingCart, Target, Trash2, Truck } from 'lucide-react';
 import { SOCIAL_ICONS, WhatsAppIcon } from '@/Components/Icons';
 import ProductCard from '@/Components/Store/ProductCard';
+import FontPicker, { fontStack } from '@/Components/Admin/FontPicker';
 import MultiSelect from '@/Components/Admin/MultiSelect';
 import { Button, Card, ConfirmModal, Field, ColorInput, FormActions, ImageField, PageHeader, Select, Textarea, TextInput, Toggle } from '@/Components/Admin/ui';
 import AdminLayout from '@/Layouts/AdminLayout';
@@ -165,9 +166,28 @@ function CardStylePicker({ styles, value, onChange, product }) {
     );
 }
 
-function Branding({ s, cardStyles, sampleProduct }) {
-    const form = useForm({ primary_color: s.primary_color, secondary_color: s.secondary_color, accent_color: s.accent_color, product_card_style: s.product_card_style || 'modern' });
+const BUTTON_RADIUS = { pill: '9999px', rounded: '0.5rem', square: '0' };
+
+function Branding({ s, fonts, cardStyles, sampleProduct }) {
+    const form = useForm({
+        primary_color: s.primary_color,
+        secondary_color: s.secondary_color,
+        accent_color: s.accent_color,
+        product_card_style: s.product_card_style || 'modern',
+        heading_font: s.heading_font ?? '',
+        body_font: s.body_font ?? '',
+        heading_weight: s.heading_weight ?? '',
+        button_shape: s.button_shape || 'pill',
+    });
     const c = form.data;
+    const known = (name) => !name || fonts.families.some((f) => f.value === name);
+    const [customHeading, setCustomHeading] = useState(!known(s.heading_font));
+    const [customBody, setCustomBody] = useState(!known(s.body_font));
+    // Weights the chosen title font has (a typed font: regular and bold, which browsers can draw).
+    const headingWeights = fonts.families.find((f) => f.value === c.heading_font)?.weights ?? (c.heading_font ? [400, 700] : [400, 500, 600, 700, 800]);
+    const headingStyle = { fontFamily: fontStack(c.heading_font, fonts.families, fonts.default), fontWeight: c.heading_weight || 700 };
+    const bodyStyle = { fontFamily: fontStack(c.body_font, fonts.families, fonts.default) };
+    const radius = BUTTON_RADIUS[c.button_shape];
     return (
         <form
             onSubmit={(e) => {
@@ -181,17 +201,78 @@ function Branding({ s, cardStyles, sampleProduct }) {
                     <ColorInput label="Secondary" help="Soft background for the hero and highlight sections." value={c.secondary_color} onChange={(v) => form.setData('secondary_color', v)} error={form.errors.secondary_color} />
                     <ColorInput label="Accent" help="Discount badges, icons and small highlights." value={c.accent_color} onChange={(v) => form.setData('accent_color', v)} error={form.errors.accent_color} />
                 </div>
+                <div className="mt-8 border-t border-zinc-100 pt-6">
+                    <h3 className="text-sm font-semibold text-zinc-900">Fonts & buttons</h3>
+                    <p className="mt-0.5 mb-4 text-sm text-zinc-500">Pick fonts that match your brand. Fonts other than the built-in one load from Google Fonts.</p>
+                    <div className="grid gap-5 sm:grid-cols-2">
+                        <FontPicker
+                            label="Title font"
+                            help="Page titles, banner headings and section headings."
+                            value={c.heading_font}
+                            onChange={(v) => {
+                                const weights = fonts.families.find((f) => f.value === v)?.weights;
+                                // Drop a weight the new font doesn't have.
+                                form.setData((d) => ({ ...d, heading_font: v, heading_weight: weights && d.heading_weight && !weights.includes(Number(d.heading_weight)) ? '' : d.heading_weight }));
+                            }}
+                            error={form.errors.heading_font}
+                            families={fonts.families}
+                            builtIn={fonts.default}
+                            custom={customHeading}
+                            onCustom={setCustomHeading}
+                        />
+                        <FontPicker
+                            label="Body font"
+                            help="Everything else: menus, product names, prices and text."
+                            value={c.body_font}
+                            onChange={(v) => form.setData('body_font', v)}
+                            error={form.errors.body_font}
+                            families={fonts.families}
+                            builtIn={fonts.default}
+                            custom={customBody}
+                            onCustom={setCustomBody}
+                        />
+                        <Select
+                            label="Title weight"
+                            help="How bold titles are. As designed keeps each title's own weight."
+                            options={[{ value: '', label: 'As designed' }, ...fonts.weights.filter((w) => headingWeights.includes(w.value))]}
+                            {...bind(form, 'heading_weight')}
+                        />
+                        <Field label="Button shape">
+                            <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Button shape">
+                                {fonts.buttonShapes.map((shape) => (
+                                    <button
+                                        key={shape.value}
+                                        type="button"
+                                        role="radio"
+                                        aria-checked={c.button_shape === shape.value}
+                                        onClick={() => form.setData('button_shape', shape.value)}
+                                        className={`flex h-11 items-center justify-center rounded-lg border text-sm font-medium transition-colors ${c.button_shape === shape.value ? 'border-zinc-900 bg-zinc-900 text-white' : 'border-zinc-200 text-zinc-700 hover:border-zinc-400'}`}
+                                    >
+                                        <span className={`mr-2 inline-block h-3.5 w-6 border-2 border-current ${shape.value === 'pill' ? 'rounded-full' : shape.value === 'rounded' ? 'rounded-[4px]' : ''}`} aria-hidden />
+                                        {shape.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </Field>
+                    </div>
+                </div>
                 <div className="mt-6 overflow-hidden rounded-xl border border-zinc-200">
-                    <div className="p-5" style={{ backgroundColor: c.secondary_color }}>
+                    <div className="p-5 sm:p-6" style={{ backgroundColor: c.secondary_color, ...bodyStyle }}>
                         <p className="text-xs font-semibold tracking-wider uppercase" style={{ color: c.accent_color }}>
                             Preview
                         </p>
-                        <p className="mt-1 text-lg font-bold text-zinc-900">Quality products for everyday living</p>
+                        <p className="mt-1.5 text-2xl leading-tight text-zinc-900 sm:text-3xl" style={headingStyle}>
+                            Quality products for everyday living
+                        </p>
+                        <p className="mt-2 max-w-md text-sm text-zinc-600">Fresh arrivals every week, delivered to your door. Order online or chat with us on WhatsApp.</p>
                         <div className="mt-4 flex flex-wrap gap-2">
-                            <span className="rounded-full px-4 py-2 text-sm font-semibold text-white" style={{ backgroundColor: c.primary_color }}>
+                            <span className="px-5 py-2.5 text-sm font-semibold text-white" style={{ backgroundColor: c.primary_color, borderRadius: radius }}>
                                 Shop now
                             </span>
-                            <span className="rounded-full px-3 py-2 text-xs font-bold text-white" style={{ backgroundColor: c.accent_color }}>
+                            <span className="border border-zinc-300 bg-white px-5 py-2.5 text-sm font-semibold text-zinc-900" style={{ borderRadius: radius }}>
+                                Learn more
+                            </span>
+                            <span className="self-center rounded-full px-3 py-1 text-xs font-bold text-white" style={{ backgroundColor: c.accent_color }}>
                                 -15%
                             </span>
                         </div>
@@ -931,12 +1012,12 @@ function Redirects({ redirects }) {
     );
 }
 
-export default function SettingsEdit({ tab, tabChosen, settings, socials, countries, shipTo, shippingZones, hasWhatsapp, titleSeparators, timezones, redirects, appIsProduction, mail, mailers, mailEncryptions, serverMailer, adminEmail, cardStyles, sampleProduct, currencyPresets, pricePreview, whatsappPreview }) {
+export default function SettingsEdit({ tab, tabChosen, settings, socials, countries, shipTo, shippingZones, hasWhatsapp, titleSeparators, timezones, redirects, appIsProduction, mail, mailers, mailEncryptions, serverMailer, adminEmail, fonts, cardStyles, sampleProduct, currencyPresets, pricePreview, whatsappPreview }) {
     const choose = (key) => router.get('/admin/settings', { tab: key }, { preserveScroll: true, preserveState: false, replace: true });
 
     const panels = {
         business: <Business s={settings} />,
-        branding: <Branding s={settings} cardStyles={cardStyles} sampleProduct={sampleProduct} />,
+        branding: <Branding s={settings} fonts={fonts} cardStyles={cardStyles} sampleProduct={sampleProduct} />,
         currency: <Currency s={settings} presets={currencyPresets} pricePreview={pricePreview} />,
         whatsapp: <WhatsApp s={settings} whatsappPreview={whatsappPreview} />,
         shop: <Shop s={settings} hasWhatsapp={hasWhatsapp} mail={mail} />,

@@ -32,6 +32,8 @@ class BusinessSetting extends Model
         'modern' => ['Modern', 'Large rounded image. Add to cart sits on the image (a bag button on phones, a bar on hover).'],
         'classic' => ['Classic', 'Image, details, then a full-width Add to cart button under each product.'],
         'boxed' => ['Boxed', 'Each product in a bordered card with the price and a bag button side by side.'],
+        'portrait' => ['Portrait', 'Tall, edge-to-edge photos with minimal text — made for clothing and fashion.'],
+        'soft' => ['Soft', 'Rounded cards on a soft tint, centred text and a round add button — gentle and friendly.'],
     ];
 
     protected $guarded = ['id', 'created_at', 'updated_at'];
@@ -42,6 +44,8 @@ class BusinessSetting extends Model
         'secondary_color' => '#F4F1EC',
         'accent_color' => '#C2410C',
         'product_card_style' => 'modern',
+        'theme' => 'essential',
+        'button_shape' => 'pill',
         'currency_code' => 'NGN',
         'currency_symbol' => '₦',
         'currency_position' => 'before',
@@ -77,6 +81,7 @@ class BusinessSetting extends Model
     {
         return [
             'decimal_places' => 'integer',
+            'heading_weight' => 'integer',
             'show_floating_whatsapp' => 'boolean',
             'shop_enabled' => 'boolean',
             'pay_whatsapp_enabled' => 'boolean',

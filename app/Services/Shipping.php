@@ -106,7 +106,7 @@ class Shipping
      *
      * @return Collection<int, array{id: int, type: string, title: string, cost: float, cost_label: string, address: ?string, method: ShippingMethod}>
      */
-    public function rates(string $country, ?string $state, ?string $postcode, float $subtotal, int $quantity): Collection
+    public function rates(string $country, ?string $state, ?string $postcode, float $subtotal, int $quantity, bool $freeShippingCoupon = false): Collection
     {
         if (! isset($this->allowedCountries()[$country])) {
             return collect();
@@ -115,7 +115,7 @@ class Shipping
         $zone = $this->matchZone($country, $state, $postcode);
 
         return collect($zone?->methods ?? [])
-            ->filter(fn (ShippingMethod $m) => $m->isAvailableFor($subtotal))
+            ->filter(fn (ShippingMethod $m) => $m->isAvailableFor($subtotal, $freeShippingCoupon))
             ->map(function (ShippingMethod $m) use ($quantity, $zone) {
                 $cost = $m->cost($quantity);
 
@@ -140,7 +140,8 @@ class Shipping
     public function freeShippingThreshold(?BusinessSetting $s = null): ?float
     {
         $zone = $this->matchZone($this->defaultCountry($s));
-        $free = $zone?->methods->first(fn (ShippingMethod $m) => $m->is_enabled && $m->type === 'free_shipping' && $m->setting('requires') === 'min_amount');
+        // "Minimum AND coupon" isn't reachable by spending more, so it gives no hint.
+        $free = $zone?->methods->first(fn (ShippingMethod $m) => $m->is_enabled && $m->type === 'free_shipping' && in_array($m->setting('requires'), ['min_amount', 'either'], true));
 
         return $free ? (float) $free->setting('min_amount') : null;
     }

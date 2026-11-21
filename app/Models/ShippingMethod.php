@@ -9,11 +9,20 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /**
  * A shipping method inside a zone (WooCommerce's three core methods):
  * - flat_rate: cost + optional cost per item
- * - free_shipping: always, or only when the order reaches a minimum amount
+ * - free_shipping: always, with a free shipping coupon, above a minimum amount, or a mix
  * - local_pickup: optional cost, plus the pickup address shown to customers
  */
 class ShippingMethod extends Model
 {
+    /** What a free shipping method needs before it is offered (WooCommerce's options). */
+    public const FREE_SHIPPING_REQUIRES = [
+        'none' => 'Nothing (always free)',
+        'coupon' => 'A valid free shipping coupon',
+        'min_amount' => 'A minimum order amount',
+        'either' => 'A minimum order amount OR a coupon',
+        'both' => 'A minimum order amount AND a coupon',
+    ];
+
     public const TYPES = [
         'flat_rate' => 'Flat rate',
         'free_shipping' => 'Free shipping',
@@ -37,17 +46,33 @@ class ShippingMethod extends Model
         return $this->settings[$key] ?? $default;
     }
 
-    /** Whether the method can be offered for an order of this size. */
-    public function isAvailableFor(float $subtotal): bool
+    /**
+     * Whether the method can be offered for an order of this size (the total
+     * after coupon discounts) and whether a free shipping coupon is applied.
+     */
+    public function isAvailableFor(float $subtotal, bool $freeShippingCoupon = false): bool
     {
         if (! $this->is_enabled) {
             return false;
         }
-        if ($this->type === 'free_shipping' && $this->setting('requires') === 'min_amount') {
-            return $subtotal >= (float) $this->setting('min_amount', 0);
+        if ($this->type !== 'free_shipping') {
+            return true;
         }
+        $reachesMinimum = $subtotal >= (float) $this->setting('min_amount', 0);
 
-        return true;
+        return match ($this->setting('requires', 'none')) {
+            'min_amount' => $reachesMinimum,
+            'coupon' => $freeShippingCoupon,
+            'either' => $reachesMinimum || $freeShippingCoupon,
+            'both' => $reachesMinimum && $freeShippingCoupon,
+            default => true,
+        };
+    }
+
+    /** Whether this free shipping method has a minimum order amount. */
+    public function hasMinimumAmount(): bool
+    {
+        return $this->type === 'free_shipping' && in_array($this->setting('requires'), ['min_amount', 'either', 'both'], true);
     }
 
     public function cost(int $quantity): float
@@ -66,7 +91,13 @@ class ShippingMethod extends Model
 
         return match ($this->type) {
             'flat_rate' => $type.' · '.Money::format($this->setting('cost', 0)).((float) $this->setting('per_item', 0) > 0 ? ' + '.Money::format($this->setting('per_item')).'/item' : ''),
-            'free_shipping' => $this->setting('requires') === 'min_amount' ? $type.' over '.Money::format($this->setting('min_amount', 0)) : $type,
+            'free_shipping' => match ($this->setting('requires')) {
+                'min_amount' => $type.' over '.Money::format($this->setting('min_amount', 0)),
+                'coupon' => $type.' with a coupon',
+                'either' => $type.' over '.Money::format($this->setting('min_amount', 0)).' or with a coupon',
+                'both' => $type.' over '.Money::format($this->setting('min_amount', 0)).' with a coupon',
+                default => $type,
+            },
             'local_pickup' => $type.((float) $this->setting('cost', 0) > 0 ? ' · '.Money::format($this->setting('cost')) : ''),
             default => $type,
         };

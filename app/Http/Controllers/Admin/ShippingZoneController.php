@@ -130,7 +130,7 @@ class ShippingZoneController extends Controller
             'methods.*.is_enabled' => ['boolean'],
             'methods.*.cost' => ['nullable', 'numeric', 'min:0', 'max:9999999999'],
             'methods.*.per_item' => ['nullable', 'numeric', 'min:0', 'max:9999999999'],
-            'methods.*.requires' => ['nullable', Rule::in(['none', 'min_amount'])],
+            'methods.*.requires' => ['nullable', Rule::in(array_keys(ShippingMethod::FREE_SHIPPING_REQUIRES))],
             'methods.*.min_amount' => ['nullable', 'numeric', 'min:0', 'max:9999999999'],
             'methods.*.address' => ['nullable', 'string', 'max:500'],
         ], [
@@ -139,7 +139,7 @@ class ShippingZoneController extends Controller
         ]);
 
         foreach ($data['methods'] ?? [] as $i => $m) {
-            if ($m['type'] === 'free_shipping' && ($m['requires'] ?? 'none') === 'min_amount' && ! is_numeric($m['min_amount'] ?? null)) {
+            if ($m['type'] === 'free_shipping' && in_array($m['requires'] ?? 'none', ['min_amount', 'either', 'both'], true) && ! is_numeric($m['min_amount'] ?? null)) {
                 throw ValidationException::withMessages(["methods.{$i}.min_amount" => 'Enter the minimum order amount.']);
             }
         }

@@ -9,8 +9,11 @@ Hi {{ $detail['customer_name'] }},
 | Item | Qty | Total |
 |:-----|:---:|------:|
 @foreach ($detail['items'] as $item)
-| {{ $item['name'] }} | {{ $item['quantity'] }} | {{ $item['line_total'] }} |
+| {{ $item['name'] }}{{ $item['variant'] ? ' — '.$item['variant'] : '' }} | {{ $item['quantity'] }} | {{ $item['line_total'] }} |
 @endforeach
+@if ($detail['discount'])
+| Coupon ({{ $detail['coupon_code'] }}) | | −{{ $detail['discount'] }} |
+@endif
 | **Total** | | **{{ $detail['total'] }}** |
 </x-mail::table>
 

@@ -13,6 +13,7 @@ use App\Services\Stats\Collector;
 use App\Services\Updater\Updater;
 use App\Support\Media;
 use App\Support\StorefrontCache;
+use App\Support\Themes;
 use App\Support\Tracking;
 use App\Support\WhatsApp;
 use Illuminate\Http\Request;
@@ -60,7 +61,13 @@ class HandleInertiaRequests extends Middleware
             'brand' => fn () => $this->brand(),
             'author' => config('catalog.author'),
             // Storefront chrome (header, footer, WhatsApp) — not needed in the admin.
-            'store' => $isAdmin ? null : fn () => StorefrontCache::remember('shared', fn () => $this->storefront()),
+            'store' => $isAdmin ? null : fn () => [
+                ...StorefrontCache::remember('shared', fn () => $this->storefront()),
+                // Depends on a template preview, so outside the cache.
+                'card_style' => $this->cardStyle(Themes::effectiveSettings(null, $request)),
+            ],
+            // Storefront template layout (Admin → Templates), and the preview bar while previewing one.
+            'theme' => $isAdmin ? null : fn () => Themes::shared($request),
             // Per visitor, so never cached.
             'cart' => $isAdmin ? null : fn () => BusinessSetting::current()->shop_enabled ? app(Cart::class)->summary() : null,
             'admin' => $isAdmin && $request->user() ? fn () => [
@@ -71,6 +78,11 @@ class HandleInertiaRequests extends Middleware
                 'version' => app(Updater::class)->currentVersion(),
             ] : null,
         ];
+    }
+
+    protected function cardStyle(BusinessSetting $s): string
+    {
+        return array_key_exists($s->product_card_style, BusinessSetting::CARD_STYLES) ? $s->product_card_style : 'modern';
     }
 
     protected function brand(): array
@@ -105,7 +117,6 @@ class HandleInertiaRequests extends Middleware
             'whatsapp_url' => WhatsApp::generalLink($s),
             'show_floating_whatsapp' => $s->show_floating_whatsapp,
             'shop_enabled' => $s->shop_enabled,
-            'card_style' => array_key_exists($s->product_card_style, BusinessSetting::CARD_STYLES) ? $s->product_card_style : 'modern',
             'payment_methods' => $s->shop_enabled ? array_values($s->paymentMethods()) : [],
             'footer_description' => $s->footer_description ?: $s->business_description,
             'copyright' => $s->copyright_text
