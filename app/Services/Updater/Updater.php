@@ -560,6 +560,67 @@ class Updater
         return ['message' => 'Restored version '.($manifest['from'] ?? '').'.'.($mentionDatabase ? ' The database was not changed.' : '')];
     }
 
+    /**
+     * One-click rollback to a previous version: undo every later update of the same item
+     * (core, or one module), newest first. Database changes of those updates are undone first
+     * (while the newest code, which has all their migration files, is still in place), then the
+     * files are put back one update at a time. The database backups stay downloadable until pruned.
+     *
+     * @return array{message: string, version: string, details: array<int, string>}
+     */
+    public function rollbackTo(string $id): array
+    {
+        $this->prepareLongStep();
+        if ($this->readState()) {
+            throw new RuntimeException('An update is in progress. Finish or cancel it first.');
+        }
+        $target = collect($this->backups())->firstWhere('id', $this->backupId($id));
+        if (! $target) {
+            throw new RuntimeException('Backup not found.');
+        }
+
+        // The target and every newer backup of the same item, newest first.
+        $chain = collect($this->backups())
+            ->filter(fn ($b) => $b['kind'] === $target['kind'] && $b['slug'] === $target['slug'] && strcmp($b['id'], $target['id']) >= 0)
+            ->sortByDesc('id')->values();
+
+        Artisan::call('down', ['--retry' => 30]);
+        $details = [];
+        try {
+            foreach ($chain as $backup) {
+                try {
+                    $output = (string) $this->rollbackDatabase($backup['id']);
+                } catch (Throwable $e) {
+                    // Don't leave the newest code on a half-rolled-back database: re-apply what was undone.
+                    try {
+                        Artisan::call('migrate', ['--force' => true]);
+                    } catch (Throwable) {
+                    }
+                    throw new RuntimeException('Undoing the database changes of version '.($backup['replaced_by'] ?? '?').' failed, so nothing was rolled back: '.$e->getMessage());
+                }
+                preg_match_all('/(\d{4}_\d{2}_\d{2}_\d{6}_\w+)\s.*DONE/', $output, $m);
+                if ($m[1]) {
+                    $details[] = 'Undid database changes of '.($backup['replaced_by'] ?? 'the update').': '.implode(', ', $m[1]).'.';
+                }
+            }
+            foreach ($chain as $backup) {
+                $this->restore($backup['id'], mentionDatabase: false);
+            }
+        } finally {
+            $this->bringOnline();
+        }
+
+        $label = $target['kind'] === 'core' ? 'version '.$target['version'] : $target['slug'].' '.$target['version'];
+        $details[] = 'Files restored to '.$label.'.';
+
+        return ['message' => 'Rolled back to '.$label.'.', 'version' => $target['version'], 'kind' => $target['kind'], 'slug' => $target['slug'], 'details' => $details];
+    }
+
+    protected function backupId(string $id): string
+    {
+        return basename($this->backupDir($id));
+    }
+
     /** Leave maintenance mode (also used to recover from an interrupted update). */
     public function bringOnline(): void
     {
@@ -839,12 +900,22 @@ class Updater
         }
     }
 
+    /**
+     * Keep the newest backups of each item (core, and each module separately, so module
+     * updates never push out core rollbacks): at least 2, or updater.keep_backups. Older ones
+     * are deleted automatically.
+     */
     protected function pruneBackups(): void
     {
+        $keep = max(2, (int) config('updater.keep_backups'));
+
         collect(glob($this->workPath.'/backups/*', GLOB_ONLYDIR) ?: [])
-            ->sortDesc()->values()
-            ->slice(max(1, (int) config('updater.keep_backups')))
-            ->each(fn ($dir) => $this->delete($dir));
+            ->groupBy(function ($dir) {
+                $manifest = json_decode((string) @file_get_contents($dir.'/manifest.json'), true) ?: [];
+
+                return ($manifest['kind'] ?? 'core').':'.($manifest['slug'] ?? 'core');
+            })
+            ->each(fn ($dirs) => $dirs->sortDesc()->values()->slice($keep)->each(fn ($dir) => $this->delete($dir)));
     }
 
     protected function clearCompiledFiles(): void

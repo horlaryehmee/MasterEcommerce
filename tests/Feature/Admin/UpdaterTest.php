@@ -231,6 +231,116 @@ class UpdaterTest extends TestCase
         $this->assertNull(Updater::cleanRepository('owner'));
     }
 
+    /** Runs the update to the faked release; $table is created by a migration that ships with it. */
+    protected function updateWithMigration(string $version, string $table, ?string $down = null): void
+    {
+        $dir = $this->tmp.'/migrations-'.$table;
+        @mkdir($dir, 0777, true);
+        $down ??= "Schema::dropIfExists('{$table}');";
+        file_put_contents($dir.'/2099_01_01_00000'.strlen($table).'_create_'.$table.'.php', <<<PHP
+        <?php
+        use Illuminate\\Database\\Migrations\\Migration;
+        use Illuminate\\Support\\Facades\\Schema;
+        return new class extends Migration {
+            public function up(): void { Schema::create('{$table}', fn (\$t) => \$t->id()); }
+            public function down(): void { {$down} }
+        };
+        PHP);
+        $this->app['migrator']->path($dir);
+
+        foreach (Updater::STEPS as $step) {
+            $this->postJson("/admin/updates/step/{$step}")->assertOk();
+        }
+        $this->assertSame("{$version}\n", $this->read('VERSION'));
+        $this->assertTrue(\Illuminate\Support\Facades\Schema::hasTable($table));
+    }
+
+    /** 1.0.0 → 1.1.0 (adds table probe_a) → 1.2.0 (adds table probe_bb). */
+    protected function twoUpdates(): void
+    {
+        $this->updateWithMigration('1.1.0', 'probe_a');
+        $this->travel(5)->seconds();
+
+        $this->zipBytes = $this->makeZip(['VERSION' => "1.2.0\n", 'artisan' => 'newer artisan', 'app/Newer.php' => 'newer', 'vendor/autoload.php' => 'newer vendor', 'bootstrap/app.php' => 'newer bootstrap', 'public/build/manifest.json' => '{"newer":true}']);
+        $this->fakeGithub('v1.2.0', hash('sha256', $this->zipBytes));
+        $this->updateWithMigration('1.2.0', 'probe_bb');
+    }
+
+    public function test_one_click_rollback_undoes_the_last_update_files_and_database(): void
+    {
+        $this->twoUpdates();
+        $backups = app(Updater::class)->backups();
+        $this->assertSame(['1.1.0', '1.0.0'], array_column($backups, 'version')); // two rollbacks available
+
+        $this->postJson("/admin/updates/backups/{$backups[0]['id']}/rollback")->assertOk()->assertJson(['version' => '1.1.0']);
+
+        $this->assertSame("1.1.0\n", $this->read('VERSION'));
+        $this->assertSame('new vendor', $this->read('vendor/autoload.php'));
+        $this->assertFileDoesNotExist($this->site.'/app/Newer.php');
+        $this->assertFalse(\Illuminate\Support\Facades\Schema::hasTable('probe_bb'));  // 1.2.0's change undone
+        $this->assertTrue(\Illuminate\Support\Facades\Schema::hasTable('probe_a'));    // 1.1.0's change kept
+        $this->assertSame('APP_KEY=client-secret', $this->read('.env'));
+        $this->assertFalse(app(Updater::class)->isDown());
+        // Still one more step back available.
+        $this->assertSame(['1.0.0'], array_column(app(Updater::class)->backups(), 'version'));
+    }
+
+    public function test_rolling_back_two_versions_undoes_both_updates_in_order(): void
+    {
+        $this->twoUpdates();
+        $oldest = collect(app(Updater::class)->backups())->firstWhere('version', '1.0.0');
+
+        $this->postJson("/admin/updates/backups/{$oldest['id']}/rollback")->assertOk()->assertJson(['version' => '1.0.0']);
+
+        $this->assertSame("1.0.0\n", $this->read('VERSION'));
+        $this->assertSame('old vendor', $this->read('vendor/autoload.php'));
+        $this->assertFileExists($this->site.'/app/Old.php');
+        $this->assertFileDoesNotExist($this->site.'/app/New.php');
+        $this->assertFileDoesNotExist($this->site.'/app/Newer.php');
+        $this->assertFileDoesNotExist($this->site.'/public/robots.txt');
+        $this->assertFalse(\Illuminate\Support\Facades\Schema::hasTable('probe_a'));
+        $this->assertFalse(\Illuminate\Support\Facades\Schema::hasTable('probe_bb'));
+        $this->assertSame('custom public_html index', $this->read('public/index.php'));
+        $this->assertSame([], app(Updater::class)->backups());
+    }
+
+    public function test_a_database_change_that_cannot_be_undone_leaves_the_site_as_it_was(): void
+    {
+        // This update's migration can't be undone.
+        $this->updateWithMigration('1.1.0', 'probe_c', "throw new \\RuntimeException('cannot undo');");
+        $backup = app(Updater::class)->backups()[0];
+
+        $this->postJson("/admin/updates/backups/{$backup['id']}/rollback")->assertStatus(422)
+            ->assertJson(fn ($json) => $json->where('message', fn ($m) => str_contains($m, 'nothing was rolled back') && str_contains($m, 'cannot undo')));
+
+        $this->assertSame("1.1.0\n", $this->read('VERSION'));
+        $this->assertTrue(\Illuminate\Support\Facades\Schema::hasTable('probe_c'));
+        $this->assertFalse(app(Updater::class)->isDown());
+        $this->assertCount(1, app(Updater::class)->backups()); // still available
+    }
+
+    public function test_backups_keep_at_least_two_per_item_and_old_ones_are_deleted(): void
+    {
+        config(['updater.keep_backups' => 1]); // never fewer than 2
+        $make = function (string $id, string $kind, string $slug) {
+            $dir = $this->tmp.'/work/backups/'.$id;
+            @mkdir($dir, 0777, true);
+            file_put_contents($dir.'/manifest.json', json_encode(['kind' => $kind, 'slug' => $slug, 'from' => '1.0.0', 'entries' => [['name' => 'app', 'existed' => true]]]));
+        };
+        foreach (['2026-01-01_000001_v1.0.0', '2026-01-02_000001_v1.1.0', '2026-01-03_000001_v1.2.0', '2026-01-04_000001_v1.3.0'] as $id) {
+            $make($id, 'core', 'core');
+        }
+        foreach (['2026-01-05_000001_v0.1.0', '2026-01-06_000001_v0.2.0', '2026-01-07_000001_v0.3.0'] as $id) {
+            $make($id, 'module', 'gift-wrap'); // newer than every core backup
+        }
+
+        (fn () => $this->pruneBackups())->call(app(Updater::class));
+
+        $left = array_map('basename', glob($this->tmp.'/work/backups/*'));
+        sort($left);
+        $this->assertSame(['2026-01-03_000001_v1.2.0', '2026-01-04_000001_v1.3.0', '2026-01-06_000001_v0.2.0', '2026-01-07_000001_v0.3.0'], $left);
+    }
+
     /* helpers */
 
     protected function fakeGithub(string $tag, ?string $digest): void

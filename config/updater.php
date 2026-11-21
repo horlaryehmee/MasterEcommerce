@@ -26,7 +26,8 @@ return [
     // How long a "check for updates" result is cached (seconds).
     'check_ttl' => 6 * 3600,
 
-    // Number of previous versions (files + database backup) kept for restoring.
+    // Previous versions (files + database backup) kept for one-click rollback, per item
+    // (core and each module separately). Never fewer than 2; older ones are deleted automatically.
     'keep_backups' => 3,
 
     // Top-level entries of the release that are never copied over the live site.

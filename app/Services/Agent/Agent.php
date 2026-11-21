@@ -640,6 +640,12 @@ class Agent
         $this->writeJson('history.json', $history);
     }
 
+    /** After a rollback made on the website itself: the newer version's signed file list no longer applies. */
+    public function forgetInstalled(string $type, string $slug): void
+    {
+        @unlink($this->installedManifestPath($type, $slug));
+    }
+
     protected function installedManifestPath(string $type, string $slug): string
     {
         return $this->dir.'/installed/'.($type === 'core' ? 'core' : $slug).'.json';

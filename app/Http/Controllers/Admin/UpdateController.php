@@ -120,6 +120,26 @@ class UpdateController extends Controller
         }
     }
 
+    /** One-click rollback: undo later updates' database changes, then put the previous files back. */
+    public function rollback(string $backup, Agent $agent): JsonResponse
+    {
+        try {
+            $result = $this->updater->rollbackTo($backup);
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        // The signed file list of the newer version no longer matches; forget it so later updates compare correctly.
+        $agent->forgetInstalled($result['kind'], $result['slug']);
+        if (AgentConnection::current()) {
+            AgentLog::write('warning', $result['message'].' (by the website admin) '.implode(' ', array_slice($result['details'], 0, -1)));
+        }
+
+        return response()->json($result);
+    }
+
     public function database(string $backup): BinaryFileResponse
     {
         try {

@@ -131,8 +131,11 @@ function Source({ source }) {
 function Backups({ backups, onRestore }) {
     const [confirm, setConfirm] = useState(null);
     if (!backups.length) return null;
+    const label = (b) => (b.kind && b.kind !== 'core' ? `${b.slug} ${b.version === '0.0.0' ? '(not installed)' : b.version}` : `version ${b.version}`);
+    // Rolling back to an older entry also undoes every later update of the same item.
+    const undone = (b) => backups.filter((o) => o.kind === b.kind && o.slug === b.slug && o.id >= b.id).map((o) => o.replaced_by).filter(Boolean);
     return (
-        <Card title="Previous versions" description="Kept automatically each time you update." padded={false}>
+        <Card title="Previous versions" description="The last versions are kept automatically after each update, so you can roll back with one click. Older ones are removed." padded={false}>
             <ul className="divide-y divide-zinc-100">
                 {backups.map((b) => (
                     <li key={b.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3.5 sm:px-5">
@@ -155,7 +158,7 @@ function Backups({ backups, onRestore }) {
                                 </a>
                             )}
                             <button type="button" onClick={() => setConfirm(b)} className="inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl border border-zinc-300 px-3 text-sm font-medium text-zinc-800 hover:bg-zinc-50 sm:h-9 sm:flex-none sm:rounded-lg">
-                                <RotateCcw size={15} /> Restore
+                                <RotateCcw size={15} /> Roll back
                             </button>
                         </span>
                     </li>
@@ -168,9 +171,13 @@ function Backups({ backups, onRestore }) {
                     onRestore(confirm);
                     setConfirm(null);
                 }}
-                title={confirm?.kind && confirm.kind !== 'core' ? `Restore ${confirm.slug} ${confirm.version}?` : `Go back to version ${confirm?.version}?`}
-                confirmLabel="Restore"
-                message="The website's files go back to this version (it is offline for a few seconds). Your products, orders and settings are not changed. Use this if something looks wrong after an update."
+                title={confirm ? `Roll back to ${label(confirm)}?` : ''}
+                confirmLabel="Roll back"
+                message={
+                    confirm
+                        ? `This undoes the update${undone(confirm).length > 1 ? 's' : ''} to ${undone(confirm).join(' and ')}: the website's files go back to ${label(confirm)} and the database changes those updates made are undone. The website is offline for a few seconds. Products, orders and customers stay; anything stored only in features added by ${undone(confirm).length > 1 ? 'those updates' : 'that update'} is removed. The database backup can still be downloaded first.`
+                        : ''
+                }
             />
         </Card>
     );
@@ -188,7 +195,7 @@ function ConnectServer() {
                 form.post('/admin/updates/agent/connect', { preserveScroll: true });
             }}
         >
-            <Card title="Update server" description={`Connect to ${usePage().props.author?.name || 'your developer'}’s central update server to receive updates managed for you. Your website keeps working whether or not the server is reachable.`}>
+            <Card title="Update server" description={`Connect to the central update server from ${usePage().props.author?.name || 'your developer'} to receive updates managed for you. Your website keeps working whether or not the server is reachable.`}>
                 <div className="space-y-5">
                     <TextInput label="Update server address" placeholder="https://updates.example.com" value={form.data.server_url} onChange={(e) => form.setData('server_url', e.target.value)} error={form.errors.server_url} />
                     <TextInput label="Connection code" placeholder="XXXXX-XXXXX-XXXXX-XXXXX-XXXXX" value={form.data.code} onChange={(e) => form.setData('code', e.target.value)} error={form.errors.code} help="A one-time code from the update server's admin." />
@@ -380,7 +387,7 @@ export default function Updates({ status, checks, pending, down, backups, steps,
     const restore = async (backup) => {
         setRestoring(backup.version);
         try {
-            await post(`/admin/updates/backups/${backup.id}/restore`);
+            await post(`/admin/updates/backups/${backup.id}/rollback`);
             window.location.href = '/admin/updates';
         } catch (e) {
             setRestoring(null);
@@ -431,7 +438,7 @@ export default function Updates({ status, checks, pending, down, backups, steps,
                 {restoring && (
                     <Card>
                         <p className="flex items-center gap-3 text-sm font-medium text-zinc-900">
-                            <Loader2 size={18} className="animate-spin" /> Restoring version {restoring}…
+                            <Loader2 size={18} className="animate-spin" /> Rolling back to version {restoring}…
                         </p>
                     </Card>
                 )}

@@ -77,6 +77,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('updates/online', [Admin\UpdateController::class, 'online'])->name('updates.online');
         Route::put('updates/source', [Admin\UpdateController::class, 'source'])->name('updates.source');
         Route::post('updates/backups/{backup}/restore', [Admin\UpdateController::class, 'restore'])->name('updates.restore');
+        Route::post('updates/backups/{backup}/rollback', [Admin\UpdateController::class, 'rollback'])->name('updates.rollback');
         Route::get('updates/backups/{backup}/database', [Admin\UpdateController::class, 'database'])->name('updates.database');
         Route::post('updates/agent/connect', [Admin\AgentController::class, 'connect'])->middleware('throttle:10,1')->name('updates.agent.connect');
         Route::post('updates/agent/disconnect', [Admin\AgentController::class, 'disconnect'])->name('updates.agent.disconnect');

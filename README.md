@@ -433,7 +433,7 @@ Sites update themselves from **Admin → Updates**: no terminal, Composer, Node.
 4. Turns on maintenance mode and swaps the code folders in. The old ones are kept, and if anything fails they are moved straight back.
 5. On the new code: runs migrations, clears caches, creates any new image sizes and brings the site back online.
 
-It never touches `.env`, `storage/` (uploads, logs, sessions), `public/index.php`, `public/.htaccess` or the uploads link. Only `public/build/` is replaced in the public folder, so the *public_html* setup (Option B above) is updated correctly too. The last 2 versions are kept under *Previous versions* with a **Restore** button, which restores files only; the database is left as it is.
+It never touches `.env`, `storage/` (uploads, logs, sessions), `public/index.php`, `public/.htaccess` or the uploads link. Only `public/build/` is replaced in the public folder, so the *public_html* setup (Option B above) is updated correctly too. The last 3 versions (never fewer than 2; core and each module counted separately, older ones deleted automatically, `updater.keep_backups`) are kept under *Previous versions* with a one-click **Roll back** button. It undoes the database changes of the later update(s) (their migrations' `down()`), then restores the files, newest update first, so going back two versions undoes both. If a database change can't be undone, nothing is rolled back. Each entry also has the database backup taken before that update to download.
 
 Requirements on the host: PHP `zip` and `curl` extensions, and the site's folders writable by PHP (normal on cPanel). The Updates page checks these and explains any fix.
 
