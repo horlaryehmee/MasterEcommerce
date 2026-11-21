@@ -24,6 +24,14 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         // Not installed yet → everything goes to the setup wizard (/install).
         $middleware->prepend(\App\Http\Middleware\EnsureInstalled::class);
+        // Store set up on https:// → always use it (the login cookie is HTTPS-only).
+        // Appended so it runs after TrustProxies: behind a proxy, https must be recognised first.
+        $middleware->append(\App\Http\Middleware\RedirectToHttps::class);
+
+        // cPanel hosts often handle HTTPS in a proxy in front of PHP (LiteSpeed, Cloudflare).
+        // Trust only its "this visit was HTTPS" headers, not client IP/host headers, so IP-based
+        // limits such as login throttling can't be bypassed with a forged X-Forwarded-For.
+        $middleware->trustProxies(at: '*', headers: Request::HEADER_X_FORWARDED_PROTO | Request::HEADER_X_FORWARDED_PORT);
 
         // Global (runs before routing), so redirects also work for URLs that no longer exist.
         $middleware->append(\App\Http\Middleware\HandleRedirects::class);
