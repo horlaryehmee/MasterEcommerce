@@ -1,8 +1,10 @@
 # Product Catalog Website
 
+By **[Bakhtech Solutions](https://bakhtech.com.ng)**.
+
 A reusable, lightweight product catalogue website for small businesses. Customers browse products and enquire on **WhatsApp**, or (optionally) add products to a cart and check out as guests. The business owner manages everything from a simple admin dashboard at `/admin`.
 
-Each client gets an **independent copy**: their own repository, hosting, database, admin account, products and images. This is not a multi-tenant SaaS.
+Each client gets an **independent installation**: their own hosting, database, admin account, products and images, all running the same core from this one repository. Features for a single client go in an extension (`extensions/`), not a separate copy of the code. This is not a multi-tenant SaaS.
 
 **Stack:** Laravel 12 · Inertia.js 2 · React 19 · Tailwind CSS 4 · MySQL · Vite. Node.js is only needed to compile assets; the live site is plain PHP.
 
@@ -159,7 +161,7 @@ Set at least:
 | `APP_DEBUG` | `false` |
 | `APP_URL` | `https://clientdomain.com`. Must be exact: image links, the sitemap and share previews use it. |
 | `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD` | from step 4.1 |
-| `MAIL_*` | SMTP details of a hosting email account (used only for admin password reset) |
+| `MAIL_*` | Fallback email settings. Usually leave them: email is set up in **Admin → Settings → Email** (SMTP or PHP mail) |
 
 ### 4.3 Install Composer dependencies
 
@@ -338,6 +340,7 @@ Log in at `https://clientdomain.com/admin`. The **Overview** page shows a setup 
 | Admin screen | What to set |
 |---|---|
 | **Website Settings → Business information** | Business name, description, logo, favicon, email, phone, address, opening hours |
+| **Website Settings → Email** | How emails are sent (SMTP server, port, encryption, login, or PHP mail), sender name and address, and a test email |
 | **→ Branding** | Primary, secondary and accent colours (live preview) |
 | **→ Currency** | One-click presets (NGN, USD, GBP, EUR, GHS, KES, ZAR) or a custom code, symbol, position, decimals and separators |
 | **→ WhatsApp** | Number in international format (e.g. `2348012345678`), message templates, floating button |
@@ -460,7 +463,7 @@ The demo seeder **refuses to run** on a database that contains a client's own pr
 | "Vite manifest not found" | `public/build` is missing. Run `npm run build` locally and upload it. |
 | 500 error after deploy | Check `storage/logs/laravel.log`. Usually permissions (4.8), a missing `APP_KEY`, or wrong DB details. Run `php artisan optimize:clear`. |
 | Admin login loops back to the login page | On plain `http://`, set `SESSION_SECURE_COOKIE=false` (or enable HTTPS). |
-| Password reset email never arrives | Check `MAIL_*` settings. Use `php artisan catalog:create-admin` to reset directly. |
+| Password reset email never arrives | Check **Settings → Email** and send a test email. Use `php artisan catalog:create-admin` to reset directly. |
 | Upload fails for large photos | Raise `upload_max_filesize`/`post_max_size` (section 5). Very large photos are resized automatically. If big batches time out, upload fewer images per save or raise `max_execution_time`. |
 | Changes in `.env` ignored | Config is cached: `php artisan optimize:clear && php artisan optimize`. |
 
@@ -519,9 +522,9 @@ Brand colours come from the admin. For deeper changes, the storefront is plain R
 - **No server-side rendering:** pages render in the browser with React. Titles, descriptions, Open Graph tags and structured data **are** rendered on the server, so search engines and WhatsApp/Facebook previews work, and Google renders the content. Search engines that don't run JavaScript see the metadata but not the page body.
 - **Descriptions use simple Markdown** (bold, italic, headings, lists, links) with a toolbar. Raw HTML is intentionally stripped for safety, and there is no WYSIWYG editor.
 - **One administrator per installation**, by design. There are no roles or permissions.
-- **Password reset needs working SMTP.** Without it, use `php artisan catalog:create-admin`.
+- **Password reset needs working email** (Settings → Email). Without it, use `php artisan catalog:create-admin`.
 - **The demo images are illustrations**, not photographs. Clients should replace them with real product photos.
 - **No online card payments.** Checkout supports WhatsApp confirmation, pay on delivery and manual bank transfer; the owner marks orders as paid. A gateway such as Paystack would need to be added.
 - **No stock counts.** Availability is the product's status (In Stock, Out of Stock, ...); quantities are not deducted when orders are placed.
-- **Order emails need working SMTP.** Orders are always saved; a failed email is logged and never blocks checkout.
+- **Order emails need working email** (Settings → Email: SMTP, or the server's PHP mail). Orders are always saved; a failed email is logged and never blocks checkout.
 - **Search uses SQL `LIKE`**, which is ideal for catalogues of hundreds to a few thousand products. It is not a full-text search engine.

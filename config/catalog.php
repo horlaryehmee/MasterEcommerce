@@ -13,6 +13,13 @@
 
 return [
 
+    // Who built and maintains this software: shown in the store footer, the admin,
+    // the login and setup pages, and the HTML "author" tag.
+    'author' => [
+        'name' => 'Bakhtech Solutions',
+        'url' => 'https://bakhtech.com.ng',
+    ],
+
     // Products shown per page on the catalog and category pages.
     'per_page' => (int) env('CATALOG_PER_PAGE', 12),
 

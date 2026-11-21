@@ -37,7 +37,7 @@ function Column({ title, children }) {
 const linkClass = 'text-white/65 transition-colors hover:text-white';
 
 export default function Footer() {
-    const { store, brand } = usePage().props;
+    const { store, brand, author } = usePage().props;
     if (!store) return null;
 
     return (
@@ -134,7 +134,17 @@ export default function Footer() {
                 </div>
             </div>
             <div className="border-t border-white/10">
-                <div className="container-page py-6 text-xs text-white/50">{store.copyright}</div>
+                <div className="container-page flex flex-col gap-2 py-6 text-xs text-white/50 sm:flex-row sm:items-center sm:justify-between">
+                    <span>{store.copyright}</span>
+                    {author && (
+                        <span>
+                            Website by{' '}
+                            <a href={author.url} target="_blank" rel="noopener" className="font-medium text-white/70 hover:text-white">
+                                {author.name}
+                            </a>
+                        </span>
+                    )}
+                </div>
             </div>
         </footer>
     );

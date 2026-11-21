@@ -67,7 +67,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::delete('redirects/{redirect}', [Admin\RedirectController::class, 'destroy'])->name('redirects.destroy');
 
         Route::get('settings', [Admin\SettingsController::class, 'edit'])->name('settings.edit');
-        Route::post('settings/shop/test-email', [Admin\SettingsController::class, 'testEmail'])->middleware('throttle:5,1')->name('settings.test-email');
+        Route::post('settings/email/test', [Admin\SettingsController::class, 'testEmail'])->middleware('throttle:5,1')->name('settings.test-email');
         Route::put('settings/{section}', [Admin\SettingsController::class, 'update'])->name('settings.update');
 
         // One-click updates. Reachable during maintenance mode (bootstrap/app.php).

@@ -11,6 +11,7 @@ use App\Models\Product;
 use App\Models\SocialLink;
 use App\Services\ImageStorage;
 use App\Services\Shipping;
+use App\Support\MailSettings;
 use App\Support\Media;
 use App\Support\Money;
 use App\Support\Tracking;
@@ -30,7 +31,7 @@ use Throwable;
 
 class SettingsController extends Controller
 {
-    public const SECTIONS = ['business', 'branding', 'currency', 'whatsapp', 'shop', 'shipping', 'social', 'seo', 'tracking', 'code', 'redirects'];
+    public const SECTIONS = ['business', 'branding', 'currency', 'whatsapp', 'shop', 'email', 'shipping', 'social', 'seo', 'tracking', 'code', 'redirects'];
 
     /** Separators offered for page titles ("Product | Store"). */
     public const TITLE_SEPARATORS = ['|', '-', '–', '—', '·', '•', ':'];
@@ -60,7 +61,10 @@ class SettingsController extends Controller
             // Phones show a settings menu until a section is picked.
             'tabChosen' => in_array($request->query('tab'), self::SECTIONS, true),
             'settings' => [
-                ...collect($s->getAttributes())->except(['id', 'created_at', 'updated_at'])->all(),
+                // Secrets (encrypted tokens, the SMTP password) never go to the browser.
+                ...collect($s->getAttributes())->except(['id', 'created_at', 'updated_at', 'update_token', 'mail_password'])->all(),
+                'mail_mailer' => $s->mail_mailer ?: 'server',
+                'has_mail_password' => filled($s->getAttributes()['mail_password'] ?? null),
                 'show_floating_whatsapp' => $s->show_floating_whatsapp,
                 'decimal_places' => $s->decimal_places,
                 'shop_enabled' => $s->shop_enabled,
@@ -99,7 +103,11 @@ class SettingsController extends Controller
                 'last_hit' => $r->last_hit_at?->diffForHumans(),
             ]),
             'appIsProduction' => app()->isProduction(),
-            'mail' => $this->mailStatus(),
+            'mail' => MailSettings::status($s),
+            'mailers' => MailSettings::MAILERS,
+            'mailEncryptions' => MailSettings::ENCRYPTIONS,
+            'serverMailer' => MailSettings::serverMailer(),
+            'adminEmail' => $request->user()?->email,
             'shippingZones' => fn () => ShippingZone::query()->ordered()->with(['locations', 'methods'])->get()->map(fn (ShippingZone $z) => [
                 'id' => $z->id,
                 'name' => $z->is_fallback ? ShippingZone::FALLBACK_NAME : $z->name,
@@ -134,6 +142,10 @@ class SettingsController extends Controller
 
         if ($section === 'shipping') {
             return $this->updateShippingLocations($request, $settings);
+        }
+
+        if ($section === 'email') {
+            return $this->updateEmail($request, $settings);
         }
 
         if ($section === 'seo') {
@@ -234,45 +246,96 @@ class SettingsController extends Controller
         return redirect()->route('admin.settings.edit', ['tab' => 'shop'])->with('success', 'Shop settings saved.');
     }
 
-    /** Emails the order-notification address, so the owner can check mail delivery works. */
-    public function testEmail(): RedirectResponse
+    /** How emails are sent: SMTP, the server's PHP mail, off, or the server's .env settings. */
+    protected function updateEmail(Request $request, BusinessSetting $settings): RedirectResponse
     {
-        $s = BusinessSetting::current();
-        $to = $s->orderNotificationAddress();
-        $back = redirect()->route('admin.settings.edit', ['tab' => 'shop']);
+        $request->merge([
+            'mail_host' => $request->filled('mail_host') ? strtolower(trim((string) $request->input('mail_host'))) : null,
+            'mail_from_address' => $request->filled('mail_from_address') ? strtolower(trim((string) $request->input('mail_from_address'))) : null,
+        ]);
+        $smtp = $request->input('mail_mailer') === 'smtp';
 
-        if (! $to) {
-            return $back->with('error', 'Add an order email address (or a business email) first, then save.');
+        $data = $request->validate([
+            'mail_mailer' => ['required', Rule::in(array_keys(MailSettings::MAILERS))],
+            'mail_host' => [Rule::requiredIf($smtp), 'nullable', 'string', 'max:190', 'regex:/^[a-z0-9]([a-z0-9.\-]*[a-z0-9])?$/'],
+            'mail_port' => [Rule::requiredIf($smtp), 'nullable', 'integer', 'between:1,65535'],
+            'mail_encryption' => [Rule::requiredIf($smtp), 'nullable', Rule::in(array_keys(MailSettings::ENCRYPTIONS))],
+            'mail_username' => ['nullable', 'string', 'max:190'],
+            'mail_password' => ['nullable', 'string', 'max:500'],
+            'remove_mail_password' => ['boolean'],
+            'mail_from_address' => ['nullable', 'email', 'max:160'],
+            'mail_from_name' => ['nullable', 'string', 'max:120'],
+        ], [
+            'mail_host.regex' => 'Enter just the server name, e.g. mail.yourdomain.com (no https:// or slashes).',
+            'mail_host.required' => 'Enter your SMTP server, e.g. mail.yourdomain.com.',
+            'mail_port.required' => 'Enter the port (usually 465 for SSL or 587 for TLS).',
+        ]);
+
+        $values = [
+            'mail_mailer' => $data['mail_mailer'] === 'server' ? null : $data['mail_mailer'],
+            'mail_host' => $data['mail_host'] ?? null,
+            'mail_port' => $data['mail_port'] ?? null,
+            'mail_encryption' => $data['mail_encryption'] ?? null,
+            'mail_username' => $data['mail_username'] ?? null,
+            'mail_from_address' => $data['mail_from_address'] ?? null,
+            'mail_from_name' => $data['mail_from_name'] ?? null,
+        ];
+        // A blank password keeps the saved one; it is only replaced when a new one is typed.
+        if (filled($data['mail_password'] ?? null)) {
+            $values['mail_password'] = $data['mail_password'];
+        } elseif ($request->boolean('remove_mail_password') || blank($values['mail_username'])) {
+            $values['mail_password'] = null;
         }
 
+        $settings->update($values);
+
+        return redirect()->route('admin.settings.edit', ['tab' => 'email'])->with('success', 'Email settings saved. Send a test email to check they work.');
+    }
+
+    /** Sends a test email with the saved settings, so the owner can check delivery works. */
+    public function testEmail(Request $request): RedirectResponse
+    {
+        $s = BusinessSetting::current();
+        $back = redirect()->route('admin.settings.edit', ['tab' => 'email']);
+        $data = $request->validate(['to' => ['nullable', 'email', 'max:160']]);
+        $to = ($data['to'] ?? null) ?: ($s->orderNotificationAddress() ?: $request->user()?->email);
+
+        if (! $to) {
+            return $back->with('error', 'Enter an email address to send the test to.');
+        }
+
+        $status = MailSettings::status($s);
         try {
             Mail::raw(
                 "This is a test email from {$s->business_name}.
 
-If you can read this, order emails are working: you'll get an email for every new order, and customers get their order confirmations and updates.",
+If you can read this, your website can send emails: you'll get an email for every new order, and customers get their order confirmations and updates.",
                 fn ($m) => $m->to($to)->subject("Test email from {$s->business_name}"),
             );
         } catch (Throwable $e) {
-            Log::warning('Test email failed', ['error' => $e->getMessage()]);
+            Log::warning('Test email failed', ['mailer' => $status['mailer'], 'error' => $e->getMessage()]);
 
-            return $back->with('error', 'The email could not be sent: '.Str::limit($e->getMessage(), 200).' Check the MAIL_ settings in your .env file.');
+            return $back->with('error', 'The email could not be sent: '.Str::limit($e->getMessage(), 220).' '.self::mailHint($status['mailer'], $e->getMessage()));
         }
 
-        return $back->with('success', $this->mailStatus()['delivers']
+        return $back->with('success', $status['delivers']
             ? "Test email sent to {$to}. Check your inbox (and spam folder)."
-            : "Test email written to the log file (storage/logs) — real delivery isn't set up yet.");
+            : "Test email written to the log file (storage/logs) — email sending is off.");
     }
 
-    /** Whether emails really leave the server (an SMTP or API mailer) or only go to the log. */
-    protected function mailStatus(): array
+    /** A plain-language next step for the most common sending errors. */
+    protected static function mailHint(string $mailer, string $error): string
     {
-        $mailer = (string) config('mail.default');
+        $e = strtolower($error);
 
-        return [
-            'mailer' => $mailer,
-            'delivers' => ! in_array($mailer, ['log', 'array'], true),
-            'from' => config('mail.from.address'),
-        ];
+        return match (true) {
+            $mailer === 'sendmail' => 'Your host may not allow PHP mail. Choose SMTP and use the email account details from cPanel → Email Accounts → Connect Devices.',
+            str_contains($e, 'authenticat') || str_contains($e, '535') => 'The username or password was refused. The username is usually the full email address.',
+            str_contains($e, 'connection could not be established') || str_contains($e, 'timed out') || str_contains($e, 'timeout') => 'The server couldn’t be reached. Check the server name and port (465 with SSL, or 587 with TLS). Some hosts block outgoing SMTP to other providers.',
+            str_contains($e, 'certificate') || str_contains($e, 'ssl') || str_contains($e, 'tls') => 'A secure connection couldn’t be made. Try the other encryption option (SSL on 465, TLS on 587), and use the mail server name your host gives (often the server’s hostname).',
+            str_contains($e, 'sender') || str_contains($e, 'from') || str_contains($e, '553') || str_contains($e, '550') => 'The server refused the sender. Set “From email” to the same address as the SMTP account.',
+            default => 'Check the email settings above.',
+        };
     }
 
     /** Selling locations and the store's default country (zones have their own pages). */

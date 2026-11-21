@@ -35,6 +35,14 @@ class AppServiceProvider extends ServiceProvider
             ? Password::min(8)->letters()->numbers()
             : Password::min(8));
 
+        // Email settings from Admin → Settings → Email, applied the first time mail is used.
+        \App\Support\MailSettings::flush();
+        $this->app->afterResolving('mail.manager', function () {
+            if ($this->app->runningUnitTests() || \App\Support\Installer::isInstalled(base_path())) {
+                \App\Support\MailSettings::apply();
+            }
+        });
+
         // Password reset emails link to the admin reset page.
         ResetPassword::createUrlUsing(fn (User $user, string $token) => route('admin.password.reset', [
             'token' => $token,

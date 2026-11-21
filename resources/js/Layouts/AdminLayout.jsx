@@ -134,6 +134,7 @@ function Sidebar() {
                 </a>
                 <p className="truncate px-3 pt-2 text-xs text-zinc-400">Signed in as {auth.user?.email}</p>
                 {admin?.version && <p className="px-3 pt-0.5 text-xs text-zinc-400">Version {admin.version}</p>}
+                <AuthorCredit className="px-3 pt-0.5" />
             </div>
         </div>
     );
@@ -190,6 +191,20 @@ function TabBar({ onMore, moreOpen }) {
     );
 }
 
+/** "by Bakhtech Solutions", linking to the developer's website. */
+export function AuthorCredit({ className = '', as: Tag = 'p' }) {
+    const { author } = usePage().props;
+    if (!author) return null;
+    return (
+        <Tag className={`text-xs text-zinc-400 ${className}`}>
+            by{' '}
+            <a href={author.url} target="_blank" rel="noopener" className="font-medium text-zinc-500 hover:text-zinc-900">
+                {author.name}
+            </a>
+        </Tag>
+    );
+}
+
 /** "More" sheet: every other section as a big tappable list, then the website link and logout. */
 function MoreSheet({ open, onClose }) {
     const { admin, auth, brand } = usePage().props;
@@ -233,6 +248,10 @@ function MoreSheet({ open, onClose }) {
                     <LogOut size={16} /> Log out
                 </button>
             </div>
+            <p className="pt-2 text-center text-xs text-zinc-400">
+                {admin?.version && <>Version {admin.version} · </>}
+                <AuthorCredit as="span" />
+            </p>
         </Sheet>
     );
 }

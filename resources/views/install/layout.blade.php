@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="noindex, nofollow">
+    <meta name="author" content="{{ config('catalog.author.name') }}">
     <title>Setup · {{ $title ?? 'Install' }}</title>
     @vite(['resources/css/app.css'])
 </head>
@@ -19,6 +20,7 @@
             @yield('content')
         </section>
         <p class="mt-6 text-center text-xs text-zinc-400">This setup page closes for good once installation is complete.</p>
+        <p class="mt-2 text-center text-xs text-zinc-400">Software by <a href="{{ config('catalog.author.url') }}" target="_blank" rel="noopener" class="font-medium text-zinc-500 hover:text-zinc-900">{{ config('catalog.author.name') }}</a></p>
     </main>
 </body>
 </html>

@@ -92,11 +92,13 @@ class BusinessSetting extends Model
             'ship_to_countries' => 'array',
             'ship_except_countries' => 'array',
             'update_token' => 'encrypted',
+            'mail_password' => 'encrypted',
+            'mail_port' => 'integer',
         ];
     }
 
     /** Never sent to the browser. */
-    protected $hidden = ['update_token'];
+    protected $hidden = ['update_token', 'mail_password'];
 
     /**
      * Payment methods customers can choose at checkout (key => label). WhatsApp

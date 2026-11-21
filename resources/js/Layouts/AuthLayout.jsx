@@ -1,7 +1,7 @@
 import { Head, usePage } from '@inertiajs/react';
 
 export default function AuthLayout({ title, subtitle, children }) {
-    const { brand } = usePage().props;
+    const { brand, author } = usePage().props;
     return (
         <div className="flex min-h-screen flex-col items-center justify-center bg-zinc-50 px-4 py-12">
             <Head title={`${title} · ${brand.name}`} />
@@ -16,6 +16,14 @@ export default function AuthLayout({ title, subtitle, children }) {
             <a href="/" className="mt-6 text-sm text-zinc-500 hover:text-zinc-900">
                 ← Back to website
             </a>
+            {author && (
+                <p className="mt-10 text-xs text-zinc-400">
+                    Software by{' '}
+                    <a href={author.url} target="_blank" rel="noopener" className="font-medium text-zinc-500 hover:text-zinc-900">
+                        {author.name}
+                    </a>
+                </p>
+            )}
         </div>
     );
 }

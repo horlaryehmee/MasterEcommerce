@@ -132,11 +132,13 @@ class OrderEmailsTest extends TestCase
         $this->assertSame('orders@shop.test', $s->orderNotificationAddress());
 
         // Tests use the "array" mailer, so the admin is told mail isn't really delivered yet.
-        $this->post('/admin/settings/shop/test-email')->assertRedirect('/admin/settings?tab=shop')
-            ->assertSessionHas('success', fn ($msg) => str_contains($msg, 'real delivery isn'));
+        $this->post('/admin/settings/email/test')->assertRedirect('/admin/settings?tab=email')
+            ->assertSessionHas('success', fn ($msg) => str_contains($msg, 'email sending is off'));
 
+        // No order or business email: the test goes to the signed-in admin instead.
         $this->put('/admin/settings/shop', ['shop_enabled' => true, 'pay_on_delivery_enabled' => true, 'order_notification_email' => '']);
         $this->settings(['email' => null]);
-        $this->post('/admin/settings/shop/test-email')->assertSessionHas('error');
+        $this->post('/admin/settings/email/test')->assertSessionHas('success');
+        $this->post('/admin/settings/email/test', ['to' => 'not-an-email'])->assertSessionHasErrors('to');
     }
 }

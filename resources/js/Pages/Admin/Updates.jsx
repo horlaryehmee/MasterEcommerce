@@ -1,4 +1,4 @@
-import { router, useForm } from '@inertiajs/react';
+import { router, useForm, usePage } from '@inertiajs/react';
 import { AlertTriangle, CheckCircle2, Circle, Download, ExternalLink, History, Loader2, PowerOff, RefreshCw, RotateCcw, ShieldCheck, XCircle } from 'lucide-react';
 import { useState } from 'react';
 import { Badge, Button, Card, ConfirmModal, FormActions, Modal, PageHeader, TextInput, Toggle } from '@/Components/Admin/ui';
@@ -96,7 +96,7 @@ function Source({ source }) {
                 form.put('/admin/updates/source', { preserveScroll: true, onSuccess: () => form.setData((d) => ({ ...d, token: '', remove_token: false })) });
             }}
         >
-            <Card title="Update source" description="Where new versions come from. Usually set up once by your developer.">
+            <Card title="Update source" description={`Where new versions come from. Usually set up once by ${usePage().props.author?.name || 'your developer'}.`}>
                 <div className="space-y-5">
                     <TextInput
                         label="GitHub repository"
@@ -188,7 +188,7 @@ function ConnectServer() {
                 form.post('/admin/updates/agent/connect', { preserveScroll: true });
             }}
         >
-            <Card title="Update server" description="Connect to your developer's central update server to receive updates managed for you. Your website keeps working whether or not the server is reachable.">
+            <Card title="Update server" description={`Connect to ${usePage().props.author?.name || 'your developer'}’s central update server to receive updates managed for you. Your website keeps working whether or not the server is reachable.`}>
                 <div className="space-y-5">
                     <TextInput label="Update server address" placeholder="https://updates.example.com" value={form.data.server_url} onChange={(e) => form.setData('server_url', e.target.value)} error={form.errors.server_url} />
                     <TextInput label="Connection code" placeholder="XXXXX-XXXXX-XXXXX-XXXXX-XXXXX" value={form.data.code} onChange={(e) => form.setData('code', e.target.value)} error={form.errors.code} help="A one-time code from the update server's admin." />

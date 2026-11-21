@@ -2,12 +2,18 @@
     "$schema": "https://getcomposer.org/schema.json",
     "name": "business/product-catalog",
     "type": "project",
-    "description": "Reusable product catalogue website with WhatsApp enquiries (Laravel + Inertia + React).",
+    "description": "Ecommerce and product catalogue website with WhatsApp enquiries, cart and checkout (Laravel + Inertia + React). By Bakhtech Solutions.",
     "keywords": [
         "laravel",
         "framework"
     ],
     "license": "MIT",
+    "authors": [
+        {
+            "name": "Bakhtech Solutions",
+            "homepage": "https://bakhtech.com.ng"
+        }
+    ],
     "require": {
         "php": "^8.2",
         "inertiajs/inertia-laravel": "^2.0",
@@ -82,5 +88,6 @@
         }
     },
     "minimum-stability": "stable",
-    "prefer-stable": true
+    "prefer-stable": true,
+    "homepage": "https://bakhtech.com.ng"
 }

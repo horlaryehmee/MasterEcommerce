@@ -1,6 +1,6 @@
 import { Link, router, useForm } from '@inertiajs/react';
 import { useState } from 'react';
-import { ArrowRightLeft, BadgeDollarSign, Building2, ChevronDown, ChevronRight, ChevronUp, Code2, ExternalLink, Palette, Pencil, Plus, Search as SearchIcon, Share2, ShoppingCart, Target, Trash2, Truck } from 'lucide-react';
+import { ArrowRightLeft, BadgeDollarSign, Building2, ChevronDown, ChevronRight, ChevronUp, Code2, ExternalLink, Mail as MailIcon, Palette, Pencil, Plus, Search as SearchIcon, Share2, ShoppingCart, Target, Trash2, Truck } from 'lucide-react';
 import { SOCIAL_ICONS, WhatsAppIcon } from '@/Components/Icons';
 import ProductCard from '@/Components/Store/ProductCard';
 import MultiSelect from '@/Components/Admin/MultiSelect';
@@ -14,6 +14,7 @@ const TABS = [
     ['currency', 'Currency'],
     ['whatsapp', 'WhatsApp'],
     ['shop', 'Shop & checkout'],
+    ['email', 'Email'],
     ['shipping', 'Shipping'],
     ['social', 'Social media'],
     ['seo', 'SEO'],
@@ -33,6 +34,7 @@ const MENU = [
     ]],
     ['Selling', [
         ['shop', ShoppingCart, 'bg-amber-500', 'Cart, payments and order emails'],
+        ['email', MailIcon, 'bg-blue-500', 'SMTP or PHP mail, sender, test email'],
         ['shipping', Truck, 'bg-orange-500', 'Where you deliver and delivery fees'],
     ]],
     ['Marketing', [
@@ -325,9 +327,6 @@ function Shop({ s, hasWhatsapp, mail }) {
         email_customer_new_order: s.email_customer_new_order,
         email_customer_updates: s.email_customer_updates,
     });
-    const [testing, setTesting] = useState(false);
-    const sendTest = () => router.post('/admin/settings/shop/test-email', {}, { preserveScroll: true, onStart: () => setTesting(true), onFinish: () => setTesting(false) });
-    const savedAddress = s.order_notification_email || s.email;
     const d = form.data;
     const toggle = (key) => ({ checked: d[key], onChange: (v) => form.setData(key, v), error: form.errors[key] });
 
@@ -347,7 +346,11 @@ function Shop({ s, hasWhatsapp, mail }) {
                 <div className="space-y-5">
                     {!mail.delivers && (
                         <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                            Emails aren’t being delivered yet — they’re only written to the log file. Add your SMTP details (MAIL_MAILER=smtp, MAIL_HOST, MAIL_USERNAME, MAIL_PASSWORD…) to the server’s .env file, then send a test email.
+                            Emails aren’t being sent yet.{' '}
+                            <Link href="/admin/settings?tab=email" className="font-semibold underline">
+                                Set up email sending
+                            </Link>{' '}
+                            (SMTP or PHP mail), then send a test email.
                         </p>
                     )}
                     <Toggle label="Email me about new orders" description="An order summary with the customer’s contact details and a link to the order. Reply to it to email the customer." {...toggle('email_owner_new_order')} />
@@ -356,14 +359,16 @@ function Shop({ s, hasWhatsapp, mail }) {
                     )}
                     <Toggle label="Send customers an order confirmation" description="Their order summary, delivery details, how to pay (with your bank details for bank transfer) and a link to view the order." {...toggle('email_customer_new_order')} />
                     <Toggle label="Email customers when their order changes" description="When you mark an order Confirmed, Out for delivery, Completed or Cancelled, or mark the payment Paid or Refunded." {...toggle('email_customer_updates')} />
-                    <div className="flex flex-wrap items-center gap-3 rounded-xl bg-zinc-50 px-4 py-3 text-sm">
-                        <span className="text-zinc-600">
-                            {mail.delivers ? <>Sending from <strong className="text-zinc-900">{mail.from}</strong> via {mail.mailer.toUpperCase()}.</> : <>Mail driver: <strong className="text-zinc-900">{mail.mailer}</strong> (not delivered).</>}
-                        </span>
-                        <Button type="button" variant="secondary" loading={testing} disabled={!savedAddress} onClick={sendTest} className="ml-auto h-auto! min-h-11 max-w-full py-2 text-center whitespace-normal! sm:min-h-10">
-                            {savedAddress ? `Send test email to ${savedAddress}` : 'Save an email address to test'}
-                        </Button>
-                    </div>
+                    {mail.delivers && (
+                        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-zinc-50 px-4 py-3 text-sm text-zinc-600">
+                            <span className="min-w-0">
+                                Sending from <strong className="break-all text-zinc-900">{mail.from}</strong>.
+                            </span>
+                            <Link href="/admin/settings?tab=email" className="font-medium text-zinc-900 underline">
+                                Email settings & test
+                            </Link>
+                        </p>
+                    )}
                 </div>
             </Card>
 
@@ -386,6 +391,132 @@ function Shop({ s, hasWhatsapp, mail }) {
                 <Button loading={form.processing}>Save shop settings</Button>
             </FormActions>
         </form>
+    );
+}
+
+const DEFAULT_PORTS = { ssl: 465, tls: 587, none: 25 };
+
+/** How the website sends email: SMTP, the server's PHP mail, off, or the server's .env file. */
+function Email({ s, mail, mailers, encryptions, serverMailer, adminEmail }) {
+    const serverDelivers = !['log', 'array', ''].includes(serverMailer);
+    const initialMailer = s.mail_mailer === 'server' && !serverDelivers ? 'log' : s.mail_mailer;
+    const form = useForm({
+        mail_mailer: initialMailer,
+        mail_host: s.mail_host ?? '',
+        mail_port: s.mail_port ?? '',
+        mail_encryption: s.mail_encryption ?? 'ssl',
+        mail_username: s.mail_username ?? '',
+        mail_password: '',
+        remove_mail_password: false,
+        mail_from_address: s.mail_from_address ?? '',
+        mail_from_name: s.mail_from_name ?? '',
+    });
+    const d = form.data;
+    const [testTo, setTestTo] = useState(s.order_notification_email || s.email || adminEmail || '');
+    const [testing, setTesting] = useState(false);
+    const sendTest = () => router.post('/admin/settings/email/test', { to: testTo }, { preserveScroll: true, onStart: () => setTesting(true), onFinish: () => setTesting(false) });
+
+    const choices = Object.entries(mailers).filter(([key]) => key !== 'server' || serverDelivers || s.mail_mailer === 'server');
+    const hints = {
+        smtp: 'Recommended. Send through an email account (your cPanel email, Gmail, Zoho, Brevo…). Best for reaching inboxes.',
+        sendmail: 'No setup: uses the hosting server’s own mail. Easiest, but emails are more likely to land in spam, and some hosts turn it off.',
+        log: 'No emails are sent. Order emails are written to the log file instead.',
+        server: `Use the MAIL_ settings in the server’s .env file (currently ${serverMailer.toUpperCase()}).`,
+    };
+    const setEncryption = (value) => {
+        const standard = d.mail_port === '' || Object.values(DEFAULT_PORTS).includes(Number(d.mail_port));
+        form.setData((data) => ({ ...data, mail_encryption: value, mail_port: standard ? DEFAULT_PORTS[value] : data.mail_port }));
+    };
+
+    return (
+        <div className="space-y-6">
+            <form
+                onSubmit={(e) => {
+                    e.preventDefault();
+                    form.put('/admin/settings/email', { preserveScroll: true, onSuccess: () => form.setData((data) => ({ ...data, mail_password: '', remove_mail_password: false })) });
+                }}
+                className="space-y-6"
+            >
+                <Card title="How emails are sent" description="Used for order emails to you and your customers, and for password reset links.">
+                    <fieldset className="space-y-2.5">
+                        <legend className="sr-only">Sending method</legend>
+                        {choices.map(([key, label]) => (
+                            <label key={key} className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3.5 transition ${d.mail_mailer === key ? 'border-zinc-900 bg-zinc-50 ring-1 ring-zinc-900' : 'border-zinc-200 hover:border-zinc-300'}`}>
+                                <input type="radio" name="mail_mailer" value={key} checked={d.mail_mailer === key} onChange={() => form.setData('mail_mailer', key)} className="mt-0.5 h-4 w-4 shrink-0 accent-zinc-900" />
+                                <span className="min-w-0">
+                                    <span className="block text-[15px] font-medium text-zinc-900 sm:text-sm">{label}</span>
+                                    <span className="mt-0.5 block text-[13px] text-zinc-500">{hints[key]}</span>
+                                </span>
+                            </label>
+                        ))}
+                    </fieldset>
+                    {form.errors.mail_mailer && <p className="mt-2 text-sm text-red-600">{form.errors.mail_mailer}</p>}
+                </Card>
+
+                {d.mail_mailer === 'smtp' && (
+                    <Card title="SMTP server" description="On cPanel: Email Accounts → your address → Connect Devices shows these details (use the “Secure SSL/TLS” settings).">
+                        <div className="space-y-5">
+                            <div className="grid gap-5 sm:grid-cols-[1fr_8rem]">
+                                <TextInput label="SMTP server" placeholder="mail.yourdomain.com" autoComplete="off" maxLength={190} {...bind(form, 'mail_host')} />
+                                <TextInput label="Port" type="number" inputMode="numeric" min={1} max={65535} {...bind(form, 'mail_port')} />
+                            </div>
+                            <Select label="Encryption" options={Object.entries(encryptions).map(([value, label]) => ({ value, label }))} value={d.mail_encryption} onChange={(e) => setEncryption(e.target.value)} error={form.errors.mail_encryption} />
+                            <div className="grid gap-5 sm:grid-cols-2">
+                                <TextInput label="Username" placeholder="orders@yourdomain.com" autoComplete="off" maxLength={190} help="Usually the full email address." optional {...bind(form, 'mail_username')} />
+                                <TextInput
+                                    label="Password"
+                                    type="password"
+                                    autoComplete="new-password"
+                                    maxLength={500}
+                                    placeholder={s.has_mail_password && !d.remove_mail_password ? '•••••••• (saved)' : ''}
+                                    help={s.has_mail_password ? 'Leave blank to keep the saved password. Stored encrypted.' : 'The email account’s password. Stored encrypted.'}
+                                    optional
+                                    {...bind(form, 'mail_password')}
+                                />
+                            </div>
+                            {s.has_mail_password && !d.mail_password && (
+                                <Toggle label="Remove the saved password" checked={d.remove_mail_password} onChange={(v) => form.setData('remove_mail_password', v)} />
+                            )}
+                        </div>
+                    </Card>
+                )}
+
+                {d.mail_mailer !== 'log' && (
+                    <Card title="Sender" description="Who your emails come from.">
+                        <div className="grid gap-5 sm:grid-cols-2">
+                            <TextInput label="From email" type="email" maxLength={160} placeholder={s.email || 'orders@yourdomain.com'} help={d.mail_mailer === 'smtp' ? 'Use the same address as the SMTP account, or it may be refused or marked as spam.' : s.email ? `Leave blank to use your business email (${s.email}).` : 'An address on your own domain works best.'} optional {...bind(form, 'mail_from_address')} />
+                            <TextInput label="From name" maxLength={120} placeholder={s.business_name} help="Leave blank to use your business name." optional {...bind(form, 'mail_from_name')} />
+                        </div>
+                    </Card>
+                )}
+
+                <FormActions dirty={form.isDirty} className="lg:border-0 lg:pt-0 max-lg:rounded-2xl max-lg:border max-lg:border-zinc-200/80 max-lg:shadow-xs">
+                    <Button loading={form.processing}>Save email settings</Button>
+                </FormActions>
+            </form>
+
+            <Card title="Send a test email" description="Uses the saved settings. Save your changes first.">
+                <div className="space-y-4">
+                    <p className={`rounded-lg px-3 py-2 text-sm ${mail.delivers ? 'bg-emerald-50 text-emerald-900' : 'bg-amber-50 text-amber-900'}`}>
+                        {mail.delivers ? (
+                            <>
+                                Sending {mail.from ? <>from <strong>{mail.from}</strong> </> : ''}via <strong>{mail.mailer === 'sendmail' ? 'PHP mail' : mail.mailer.toUpperCase()}</strong>
+                                {mail.source === 'server' ? ' (server .env settings)' : ''}.
+                            </>
+                        ) : (
+                            'Email sending is off: emails are only written to the log file.'
+                        )}
+                    </p>
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                        <TextInput label="Send to" type="email" className="min-w-0 flex-1" value={testTo} onChange={(e) => setTestTo(e.target.value)} />
+                        <Button type="button" variant="secondary" loading={testing} disabled={!testTo || form.isDirty} onClick={sendTest}>
+                            Send test email
+                        </Button>
+                    </div>
+                    {form.isDirty && <p className="text-xs text-zinc-500">Save your changes to test them.</p>}
+                </div>
+            </Card>
+        </div>
     );
 }
 
@@ -800,7 +931,7 @@ function Redirects({ redirects }) {
     );
 }
 
-export default function SettingsEdit({ tab, tabChosen, settings, socials, countries, shipTo, shippingZones, hasWhatsapp, titleSeparators, timezones, redirects, appIsProduction, mail, cardStyles, sampleProduct, currencyPresets, pricePreview, whatsappPreview }) {
+export default function SettingsEdit({ tab, tabChosen, settings, socials, countries, shipTo, shippingZones, hasWhatsapp, titleSeparators, timezones, redirects, appIsProduction, mail, mailers, mailEncryptions, serverMailer, adminEmail, cardStyles, sampleProduct, currencyPresets, pricePreview, whatsappPreview }) {
     const choose = (key) => router.get('/admin/settings', { tab: key }, { preserveScroll: true, preserveState: false, replace: true });
 
     const panels = {
@@ -809,6 +940,7 @@ export default function SettingsEdit({ tab, tabChosen, settings, socials, countr
         currency: <Currency s={settings} presets={currencyPresets} pricePreview={pricePreview} />,
         whatsapp: <WhatsApp s={settings} whatsappPreview={whatsappPreview} />,
         shop: <Shop s={settings} hasWhatsapp={hasWhatsapp} mail={mail} />,
+        email: <Email s={settings} mail={mail} mailers={mailers} encryptions={mailEncryptions} serverMailer={serverMailer} adminEmail={adminEmail} />,
         shipping: <Shipping s={settings} countries={countries} shipTo={shipTo} zones={shippingZones} />,
         social: <Social socials={socials} />,
         seo: <Seo s={settings} separators={titleSeparators} isProduction={appIsProduction} />,
@@ -831,7 +963,7 @@ export default function SettingsEdit({ tab, tabChosen, settings, socials, countr
                 </div>
             )}
             <div className="hidden lg:block">
-                <PageHeader title="Website Settings" description="Your business details, branding, checkout, shipping, SEO and tracking settings." />
+                <PageHeader title="Website Settings" description="Your business details, branding, checkout, email, shipping, SEO and tracking settings." />
             </div>
             <div className={`grid gap-6 lg:grid-cols-[220px_1fr] ${tabChosen ? '' : 'max-lg:hidden'}`}>
                 <div className="hidden lg:block">

@@ -58,6 +58,7 @@ class HandleInertiaRequests extends Middleware
             // Built-in visitor statistics on/off for this visitor.
             'stats' => ! $isAdmin && Collector::shouldTrack($request),
             'brand' => fn () => $this->brand(),
+            'author' => config('catalog.author'),
             // Storefront chrome (header, footer, WhatsApp) — not needed in the admin.
             'store' => $isAdmin ? null : fn () => StorefrontCache::remember('shared', fn () => $this->storefront()),
             // Per visitor, so never cached.
