@@ -34,6 +34,7 @@ class DashboardController extends Controller
             ->selectRaw('SUM(CASE WHEN is_featured = 1 THEN 1 ELSE 0 END) as featured')
             ->first();
 
+        $categoryCount = Category::query()->count();
         $settings = BusinessSetting::current();
 
         return Inertia::render('Admin/Dashboard', [
@@ -42,7 +43,7 @@ class DashboardController extends Controller
                 'published' => (int) $counts->published,
                 'drafts' => (int) $counts->drafts,
                 'featured' => (int) $counts->featured,
-                'categories' => Category::query()->count(),
+                'categories' => $categoryCount,
             ],
             'recentlyAdded' => Product::query()->with(['primaryImage', 'category:id,name'])->latest()->latest('id')->limit(5)->get()->map($row),
             'recentlyUpdated' => Product::query()->with(['primaryImage', 'category:id,name'])->latest('updated_at')->latest('id')->limit(5)->get()->map($row),
@@ -50,8 +51,8 @@ class DashboardController extends Controller
             'setup' => [
                 ['label' => 'Upload your logo', 'done' => filled($settings->logo_path), 'href' => '/admin/settings?tab=business'],
                 ['label' => 'Add your WhatsApp number', 'done' => WhatsApp::normalize($settings->whatsapp_number) !== null, 'href' => '/admin/settings?tab=whatsapp'],
-                ['label' => 'Create a category', 'done' => Category::query()->exists(), 'href' => '/admin/categories/create'],
-                ['label' => 'Add your first product', 'done' => Product::query()->exists(), 'href' => '/admin/products/create'],
+                ['label' => 'Create a category', 'done' => $categoryCount > 0, 'href' => '/admin/categories/create'],
+                ['label' => 'Add your first product', 'done' => (int) $counts->total > 0, 'href' => '/admin/products/create'],
             ],
         ]);
     }

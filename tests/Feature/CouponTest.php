@@ -372,4 +372,23 @@ class CouponTest extends TestCase
         $this->assertSame('1000.00', $order->discount_total);
         $this->get("/admin/orders/{$order->id}")->assertInertia(fn (Assert $page) => $page->where('order.coupon_code', 'SAVE10')->where('order.discount', '₦1,000'));
     }
+
+    public function test_the_cart_drawer_offers_a_coupon_field_only_when_coupons_exist(): void
+    {
+        $product = $this->product(['price' => 10000]);
+        $this->post('/cart', ['product_id' => $product->id]);
+
+        // No coupon switched on: no field.
+        $this->get('/')->assertInertia(fn (Assert $p) => $p->where('cart.coupons_enabled', false));
+
+        $this->coupon(['code' => 'SAVE10', 'discount_type' => 'percent', 'amount' => 10]);
+        $this->get('/')->assertInertia(fn (Assert $p) => $p->where('cart.coupons_enabled', true)->where('cart.coupon', null));
+
+        // Applied from the drawer: the drawer shows the discount and the new total.
+        $this->from('/')->post('/cart/coupon', ['coupon' => 'save10'])->assertRedirect('/');
+        $this->get('/')->assertInertia(fn (Assert $p) => $p
+            ->where('cart.coupon.code', 'SAVE10')
+            ->where('cart.coupon.discount_label', '₦1,000')
+            ->where('cart.total', '₦9,000'));
+    }
 }

@@ -40,6 +40,11 @@ class BusinessSetting extends Model
 
     protected $attributes = [
         'business_name' => 'My Business',
+        // Same defaults as the columns, so a freshly created settings row has them too.
+        'reviews_enabled' => true,
+        'reviews_home_enabled' => true,
+        'reviews_auto_publish' => 'manual',
+        'paystack_mode' => 'test',
         'primary_color' => '#111827',
         'secondary_color' => '#F4F1EC',
         'accent_color' => '#C2410C',
@@ -102,6 +107,8 @@ class BusinessSetting extends Model
             'paystack_live_secret_key' => 'encrypted',
             'vapid_private_key' => 'encrypted',
             'pay_paystack_enabled' => 'boolean',
+            'reviews_enabled' => 'boolean',
+            'reviews_home_enabled' => 'boolean',
             'mail_port' => 'integer',
         ];
     }

@@ -41,6 +41,41 @@ class AdminAlerts
         ]);
     }
 
+    /** A customer review is waiting for approval. */
+    public function reviewWaiting(\App\Models\Review $review): void
+    {
+        $this->later(fn () => [
+            'title' => 'New '.$review->rating.'★ review to approve',
+            'body' => $review->name.' on '.$review->product->name.': “'.\Illuminate\Support\Str::limit($review->body, 80).'”',
+            'url' => '/admin/reviews?status=pending',
+            'tag' => 'review-'.$review->id,
+        ]);
+    }
+
+    /** A customer uploaded a bank-transfer receipt to check. */
+    public function receiptUploaded(\App\Models\PaymentReceipt $receipt): void
+    {
+        $order = $receipt->order;
+        $this->later(fn () => [
+            'title' => "Payment receipt for order #{$order->number}",
+            'body' => $order->customer_name.' says they’ve paid '.Money::format($order->total).'. Check your bank, then confirm the payment.',
+            'url' => route('admin.orders.show', $order, false),
+            'tag' => 'receipt-'.$receipt->id,
+        ]);
+    }
+
+    /** A bank-transfer customer pressed "I've made the payment". */
+    public function paymentReported(Order $order): void
+    {
+        $hasReceipt = $order->receipts()->exists();
+        $this->later(fn () => [
+            'title' => "Order #{$order->number}: customer says they’ve paid",
+            'body' => $order->customer_name.' sent '.Money::format($order->total).' by bank transfer'.($hasReceipt ? ' (receipt attached)' : '').'. Check your bank, then confirm the payment.',
+            'url' => route('admin.orders.show', $order, false),
+            'tag' => 'order-'.$order->id.'-paid',
+        ]);
+    }
+
     public function test(PushSubscription $subscription): bool
     {
         return $this->push->send([$subscription], $this->payload([
@@ -53,7 +88,7 @@ class AdminAlerts
 
     protected function later(callable $make): void
     {
-        if (! PushSubscription::query()->exists()) {
+        if (! PushSubscription::query()->active()->exists()) {
             return;
         }
         defer(function () use ($make) {

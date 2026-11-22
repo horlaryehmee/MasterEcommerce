@@ -6,11 +6,11 @@ import { useId, useState } from 'react';
  * "Have a coupon?" field for the cart and checkout summaries. The server checks
  * the code and the page reloads its totals; one coupon per order.
  * `error` is a coupon problem found when the order was placed.
+ * The field is shown open, so shoppers see straight away that codes work here.
  */
-export default function CouponBox({ coupon, notice, error }) {
+export default function CouponBox({ coupon, notice, error, compact = false }) {
     const id = useId();
     const form = useForm({ coupon: '' });
-    const [open, setOpen] = useState(!!error);
     const [removing, setRemoving] = useState(false);
     const message = form.errors.coupon || error;
 
@@ -20,10 +20,7 @@ export default function CouponBox({ coupon, notice, error }) {
         form.post('/cart/coupon', {
             preserveScroll: true,
             preserveState: true,
-            onSuccess: () => {
-                form.reset();
-                setOpen(false);
-            },
+            onSuccess: () => form.reset(),
         });
     };
 
@@ -54,16 +51,15 @@ export default function CouponBox({ coupon, notice, error }) {
                         {removing ? <Loader2 size={16} className="animate-spin" /> : <X size={16} />}
                     </button>
                 </div>
-            ) : open ? (
+            ) : (
                 // Not a nested <form>: on the checkout page this sits inside the order form.
                 <div role="group" aria-labelledby={`${id}-label`}>
-                    <label id={`${id}-label`} htmlFor={id} className="mb-1.5 block text-sm font-medium text-stone-800">
-                        Coupon code
+                    <label id={`${id}-label`} htmlFor={id} className={`mb-1.5 flex items-center gap-1.5 font-medium text-stone-800 ${compact ? 'text-[13px]' : 'text-sm'}`}>
+                        <TicketPercent size={compact ? 14 : 16} className="text-stone-500" /> Have a coupon code?
                     </label>
                     <div className="flex gap-2">
                         <input
                             id={id}
-                            autoFocus
                             autoComplete="off"
                             autoCapitalize="characters"
                             spellCheck={false}
@@ -76,21 +72,14 @@ export default function CouponBox({ coupon, notice, error }) {
                             onKeyDown={(e) => e.key === 'Enter' && apply(e)}
                             placeholder="Enter code"
                             aria-invalid={message ? true : undefined}
-                            className={`h-11 min-w-0 flex-1 rounded-xl border bg-white px-3.5 text-[15px] tracking-wide text-stone-900 uppercase placeholder:tracking-normal placeholder:text-stone-400 placeholder:normal-case focus:border-stone-900 focus:ring-0 focus:outline-none ${message ? 'border-red-500' : 'border-stone-300'}`}
+                            className={`${compact ? 'h-10' : 'h-11'} min-w-0 flex-1 rounded-xl border bg-white px-3.5 text-[15px] tracking-wide text-stone-900 uppercase placeholder:tracking-normal placeholder:text-stone-400 placeholder:normal-case focus:border-stone-900 focus:ring-0 focus:outline-none ${message ? 'border-red-500' : 'border-stone-300'}`}
                         />
-                        <button type="button" onClick={apply} disabled={form.processing || !form.data.coupon.trim()} className="inline-flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-xl bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-800 disabled:opacity-50">
+                        <button type="button" onClick={apply} disabled={form.processing || !form.data.coupon.trim()} className={`inline-flex ${compact ? 'h-10' : 'h-11'} shrink-0 items-center justify-center gap-1.5 rounded-xl bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-800 disabled:opacity-50`}>
                             {form.processing && <Loader2 size={15} className="animate-spin" />} Apply
                         </button>
                     </div>
                     {message && <p className="mt-1.5 text-xs font-medium text-red-600" data-error>{message}</p>}
                 </div>
-            ) : (
-                <>
-                    <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-1.5 text-sm font-medium text-stone-700 underline-offset-2 hover:text-stone-950 hover:underline">
-                        <TicketPercent size={16} /> Have a coupon code?
-                    </button>
-                    {message && <p className="text-xs font-medium text-red-600" data-error>{message}</p>}
-                </>
             )}
         </div>
     );

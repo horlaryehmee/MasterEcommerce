@@ -95,7 +95,7 @@ php artisan serve
 
 Open http://127.0.0.1:8000 and log in at http://127.0.0.1:8000/admin.
 
-> In a **local** environment the demo seeder creates `admin@example.com` / `password`. This account is **never** created in production.
+> For a local demo, set the administrator login with `php artisan catalog:create-admin`. The demo seeder generates a random password.
 
 Run the tests:
 
@@ -192,6 +192,12 @@ php artisan db:seed --force          # essential setup only, never demo data
 php artisan storage:link
 php artisan catalog:create-admin
 ```
+
+For the web installer, open the site over HTTPS and enter the generated `INSTALL_SETUP_TOKEN` from the hosting account’s private `.env` file. For an existing environment file, set this value to a random secret of at least 32 characters. The wizard clears the token at completion.
+
+With `TRUSTED_PROXIES` empty (the default, typical cPanel/Cloudflare hosting), only the proxy's "this visit was HTTPS" header is believed, so HTTPS handled by a proxy works, and forwarded client IPs are ignored, so IP-based limits cannot be bypassed. If you operate the reverse proxy, set `TRUSTED_PROXIES` to its IP addresses or CIDRs: only those peers are then believed, including the real visitor IP from `X-Forwarded-For`. Restrict direct origin access and configure the proxy to overwrite forwarded headers. Serve the Laravel `public/` directory. Use production mode, HTTPS-only cookies and encrypted sessions in production. Enabling session encryption on an existing site requires users to sign in again.
+
+To review pre-upgrade visitor statistics, run `php artisan security:review-analytics-links`. It reports affected rows and matching order numbers without displaying tokens. Capture the affected order numbers before running it with `--redact`. Review hosting access logs, analytics exports, third-party analytics and backups separately. For each confirmed exposure, run `php artisan security:rotate-order-link NUMBER` and deliver the replacement from Admin Orders to the customer.
 
 ### 4.5 Create (or reset) the administrator account
 

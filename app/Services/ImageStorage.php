@@ -37,7 +37,7 @@ class ImageStorage
      * @param  string  $format  "webp" (default), "png" (favicons) or "jpg" (social sharing image).
      * @return string Stored path of the full-size image, relative to the public disk.
      */
-    public function store(UploadedFile|string $source, string $profile, string $format = 'webp'): string
+    public function store(UploadedFile|string $source, string $profile, string $format = 'webp', string $disk = 'public'): string
     {
         $sizes = $this->sizes($profile);
         $sourcePath = $source instanceof UploadedFile ? $source->getRealPath() : $source;
@@ -48,7 +48,7 @@ class ImageStorage
         }
 
         $name = $profile.'/'.Str::lower((string) Str::ulid()).'.'.$format;
-        $after = $this->writeVariants($bytes, $name, $sizes, $format, $profile === 'branding');
+        $after = $this->writeVariants($bytes, $name, $sizes, $format, $profile === 'branding', disk: $disk);
 
         $this->stats['count']++;
         $this->stats['before'] += strlen($bytes);
@@ -129,7 +129,7 @@ class ImageStorage
      *
      * @return int Bytes written for the full-size ("lg") file.
      */
-    protected function writeVariants(string $bytes, string $name, array $sizes, string $format, bool $forceLossless, bool $onlyVariants = false): int
+    protected function writeVariants(string $bytes, string $name, array $sizes, string $format, bool $forceLossless, bool $onlyVariants = false, string $disk = 'public'): int
     {
         if (! extension_loaded('gd')) {
             throw new RuntimeException('The PHP GD extension is required for image uploads.');
@@ -139,6 +139,9 @@ class ImageStorage
         $info = @getimagesizefromstring($bytes);
         if (! $info || ! in_array($info[2], [IMAGETYPE_JPEG, IMAGETYPE_PNG, IMAGETYPE_WEBP], true)) {
             throw new RuntimeException('Unsupported image. Please upload a JPEG, PNG or WebP file.');
+        }
+        if ($info[0] < 1 || $info[1] < 1 || max($info[0], $info[1]) > 12000 || $info[0] * $info[1] > 24000000) {
+            throw new RuntimeException('Resize the image to at most 24 megapixels and 12,000 pixels per side.');
         }
         $type = $info[2];
 
@@ -157,7 +160,7 @@ class ImageStorage
         $hasAlpha = ColorProfile::hasAlpha($bytes, $type);
         $isGraphicSource = $type === IMAGETYPE_PNG || ($type === IMAGETYPE_WEBP && ColorProfile::isLosslessWebp($bytes));
 
-        $disk = Storage::disk('public');
+        $storage = Storage::disk($disk);
         $lossless = $forceLossless ? true : null; // null = decide on the first (largest) size
         $lgBytes = 0;
 
@@ -199,7 +202,9 @@ class ImageStorage
                     $lgBytes = strlen($data);
                 }
                 if (! ($onlyVariants && $size === 'lg')) {
-                    $disk->put($size === 'lg' ? $name : Media::variantPath($name, $size), $data);
+                    if (! $storage->put($size === 'lg' ? $name : Media::variantPath($name, $size), $data)) {
+                        throw new RuntimeException('Could not save the image.');
+                    }
                 }
 
                 if ($output !== $resized) {

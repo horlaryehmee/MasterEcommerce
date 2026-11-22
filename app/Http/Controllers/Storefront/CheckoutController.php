@@ -225,7 +225,8 @@ class CheckoutController extends StorefrontController
             }
         }
 
-        return redirect()->route('orders.show', $order->token)->with('analytics', [Tracking::purchase($order)]);
+        // The tokenless thank-you address, so ad pixels record the purchase without seeing the private link.
+        return redirect()->route('orders.thanks')->with('analytics', [Tracking::purchase($order)]);
     }
 
     protected function ratesFor(?string $country, ?string $state, ?string $postcode): Collection

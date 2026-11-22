@@ -39,6 +39,7 @@ class UpdateAgentTest extends TestCase
         parent::setUp();
         $this->seed(EssentialSeeder::class);
         $this->actingAsAdmin();
+        $this->withSession(['auth.password_confirmed_at' => now()->timestamp]);
 
         $this->tmp = sys_get_temp_dir().'/agent-test-'.Str::random(8);
         $this->site = $this->tmp.'/site';

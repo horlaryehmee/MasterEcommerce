@@ -22,6 +22,19 @@ class InstallController extends Controller
 {
     public const EXTENSIONS = ['pdo_mysql', 'mbstring', 'openssl', 'tokenizer', 'xml', 'ctype', 'fileinfo', 'curl', 'zip', 'gd'];
 
+    public function unlock(Request $request): RedirectResponse
+    {
+        $secret = (string) config('catalog.setup_token');
+        $input = $request->validate(['setup_token' => ['required', 'string', 'max:512']]);
+        if (strlen($secret) < 32 || ! hash_equals($secret, $input['setup_token'])) {
+            return back()->withErrors(['setup_token' => 'Check the setup token in your server configuration.']);
+        }
+        $request->session()->regenerate();
+        $request->session()->put('install.owner', hash('sha256', $secret));
+
+        return redirect()->route('install.welcome');
+    }
+
     public function welcome(): View
     {
         $checks = Installer::requirements(base_path(), self::EXTENSIONS);
@@ -78,7 +91,7 @@ class InstallController extends Controller
             'url' => ['required', 'url', 'max:255'],
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255'],
-            'password' => ['required', 'string', 'min:8', 'confirmed'],
+            'password' => ['required', 'string', \Illuminate\Validation\Rules\Password::defaults(), 'confirmed'],
             'demo' => ['boolean'],
         ]);
         @set_time_limit(300);
@@ -98,7 +111,11 @@ class InstallController extends Controller
 
             if ($request->boolean('demo')) {
                 DemoSeeder::$confirmed = true;
-                Artisan::call('db:seed', ['--class' => DemoSeeder::class, '--force' => true]);
+                try {
+                    Artisan::call('db:seed', ['--class' => DemoSeeder::class, '--force' => true]);
+                } finally {
+                    DemoSeeder::$confirmed = false;
+                }
                 $steps[] = 'Loaded the demo products.';
             }
 
@@ -110,13 +127,14 @@ class InstallController extends Controller
 
             $env = [
                 'APP_NAME' => $data['site_name'], 'APP_URL' => $url, 'APP_ENV' => 'production', 'APP_DEBUG' => false,
-                'SESSION_DRIVER' => 'database', 'SESSION_SECURE_COOKIE' => $https,
+                'SESSION_DRIVER' => 'database', 'SESSION_SECURE_COOKIE' => $https, 'SESSION_ENCRYPT' => true, 'INSTALL_SETUP_TOKEN' => '',
             ];
             $env += $this->linkUploads();
             Installer::writeEnv($base, $env);
             $steps[] = isset($env['PUBLIC_DISK_ROOT']) ? 'Set up image uploads (this host blocks shortcuts, so they go straight into public/storage).' : 'Set up image uploads.';
 
             Artisan::call('optimize:clear');
+            $request->session()->forget('install.owner');
             Installer::markInstalled($base, ['app' => 'catalog', 'url' => $url]);
         } catch (Throwable $e) {
             report($e);

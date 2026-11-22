@@ -20,6 +20,9 @@
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 <head>
+    @if ($storefront)
+        <meta name="stats-csrf" content="{{ csrf_token() }}">
+    @endif
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="xsrf-cookie" content="{{ \App\Http\Middleware\ValidateCsrfToken::cookieName() }}">
@@ -61,7 +64,7 @@
         <meta name="robots" content="noindex, nofollow">
     @endisset
 
-    @if ($storefront)
+    @if ($storefront && ! \App\Support\Tracking::privatePage(request()))
         @include('partials.head-extras', ['settings' => $settings, 'tracking' => $tracking])
     @endif
 
@@ -112,14 +115,14 @@
     @inertiaHead
 </head>
 <body class="antialiased">
-    @if ($storefront)
+    @if ($storefront && ! \App\Support\Tracking::privatePage(request()))
         @if ($tracking['gtm'] ?? null)
             <noscript><iframe src="https://www.googletagmanager.com/ns.html?id={{ $tracking['gtm'] }}" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         @endif
         {!! $settings->body_code !!}
     @endif
     @inertia
-    @if ($storefront)
+    @if ($storefront && ! \App\Support\Tracking::privatePage(request()))
         {!! $settings->footer_code !!}
     @endif
 </body>

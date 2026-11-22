@@ -44,6 +44,8 @@ class PaystackTest extends TestCase
 
     protected array $verifyData = [];
 
+    protected bool $verifyUnavailable = false;
+
     protected bool $referenceUnknown = false;
 
     /** One fake for the whole test; the helpers change what it answers. */
@@ -63,6 +65,10 @@ class PaystackTest extends TestCase
                 return Http::response(['status' => false, 'message' => 'Transaction reference not found'], 400);
             }
             if (str_contains($request->url(), '/transaction/verify/')) {
+                if ($this->verifyUnavailable) {
+                    return Http::response([], 503);
+                }
+
                 return Http::response(['status' => true, 'data' => $this->verifyData]);
             }
 
@@ -161,7 +167,7 @@ class PaystackTest extends TestCase
         $payment = $order->payments()->first();
         $this->fakeVerify($payment);
 
-        $this->get('/payments/paystack/callback?reference='.$payment->reference)->assertRedirect(route('orders.show', $order->token));
+        $this->get('/payments/paystack/callback?reference='.$payment->reference)->assertRedirect(route('orders.thanks')); // paid in this browser: the tokenless thank-you address
 
         $order->refresh();
         $this->assertSame('paid', $order->payment_status);
@@ -430,6 +436,46 @@ class PaystackTest extends TestCase
         $this->artisan('orders:cancel-unpaid')->expectsOutput('1 unpaid order cancelled.');
         $this->assertSame('cancelled', $order->fresh()->status);
         $this->get(route('orders.show', $order->token))->assertInertia(fn (Assert $p) => $p->where('paymentState', 'cancelled')->where('payUrl', null));
+    }
+
+    public function test_cancel_callback_preserves_a_concurrent_success(): void
+    {
+        $this->fakeInitialize();
+        $this->checkout();
+        $payment = Order::firstOrFail()->payments()->firstOrFail();
+        $this->partialMock(Paystack::class)->shouldReceive('verify')->once()
+            ->andReturnUsing(function (Payment $pending) {
+                // A webhook commits after the callback reads the pending attempt.
+                Payment::whereKey($pending->id)->update(['status' => 'success']);
+                $pending->order()->update(['status' => 'pending', 'payment_status' => 'paid']);
+
+                return $pending;
+            });
+
+        $this->get(route('payments.paystack.callback', ['reference' => $payment->reference, 'cancelled' => 1]))
+            ->assertSessionHas('success');
+        $this->assertSame('success', $payment->fresh()->status);
+    }
+
+    public function test_unavailable_verification_defers_cleanup_and_requests_a_webhook_retry(): void
+    {
+        $this->fakeInitialize();
+        $this->checkout();
+        $order = Order::firstOrFail();
+        $payment = $order->payments()->firstOrFail();
+        $body = json_encode(['event' => 'charge.success', 'data' => ['reference' => $payment->reference]]);
+        $headers = ['CONTENT_TYPE' => 'application/json', 'HTTP_X_PAYSTACK_SIGNATURE' => hash_hmac('sha512', $body, self::SECRET)];
+        $this->verifyUnavailable = true;
+
+        $this->call('POST', '/payments/paystack/webhook', [], [], [], $headers, $body)->assertStatus(503);
+        $this->travel(25)->hours();
+        $this->artisan('orders:cancel-unpaid')->expectsOutput('0 unpaid orders cancelled.');
+        $this->assertSame('awaiting_payment', $order->fresh()->status);
+
+        $this->verifyUnavailable = false;
+        $this->fakeVerify($payment);
+        $this->call('POST', '/payments/paystack/webhook', [], [], [], $headers, $body)->assertOk();
+        $this->assertSame('paid', $order->fresh()->payment_status);
     }
 
     public function test_a_late_payment_is_recorded_instead_of_cancelling(): void

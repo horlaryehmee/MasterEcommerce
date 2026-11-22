@@ -8,9 +8,9 @@ import { createPortal } from 'react-dom';
 /* ------------------------------------------------------------------ */
 
 /**
- * Page title. Phones get an app-style large title with a back pill above it,
- * and `fab` ({ href, label, icon }) becomes a floating button over the tab bar
- * (larger screens show it as a normal button next to `actions`).
+ * Page title. Phones get an app-style large title with a back pill above it.
+ * `fab` ({ href, label, icon }) is the page's main "Add …" button, shown next
+ * to `actions` on every screen size.
  */
 export function PageHeader({ title, description, actions, back, fab }) {
     const FabIcon = fab?.icon || Plus;
@@ -31,21 +31,13 @@ export function PageHeader({ title, description, actions, back, fab }) {
             {(actions || fab) && (
                 <div className="no-scrollbar -mx-4 flex shrink-0 gap-2 overflow-x-auto px-4 empty:hidden sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 [&>*]:shrink-0">
                     {actions}
+                    {/* The main "Add …" button: in the header on every screen size (no floating button covering content). */}
                     {fab && (
-                        <Button href={fab.href} className="hidden sm:inline-flex">
+                        <Button href={fab.href}>
                             <FabIcon size={16} /> {fab.label}
                         </Button>
                     )}
                 </div>
-            )}
-            {fab && (
-                <Link
-                    href={fab.href}
-                    aria-label={fab.label}
-                    className="fixed right-4 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-30 flex h-14 items-center gap-2 rounded-2xl bg-zinc-900 pr-5 pl-4 text-sm font-semibold text-white shadow-lg shadow-zinc-900/25 transition active:scale-95 lg:hidden sm:hidden"
-                >
-                    <FabIcon size={20} /> {fab.label}
-                </Link>
             )}
         </div>
     );

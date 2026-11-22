@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { WhatsAppIcon } from '@/Components/Icons';
 import { OrderStatusBadge, PaymentStatusBadge } from '@/Components/Admin/OrderBadges';
 import { Card, PageHeader } from '@/Components/Admin/ui';
+import Receipts from '@/Components/Admin/Receipts';
 import AdminLayout from '@/Layouts/AdminLayout';
 
 function Row({ label, children }) {
@@ -35,7 +36,7 @@ function StatusPicker({ label, field, value, options, orderId }) {
 
 const PAYMENT_COLORS = { success: 'bg-emerald-50 text-emerald-700', flagged: 'bg-red-50 text-red-700', failed: 'bg-zinc-100 text-zinc-600', abandoned: 'bg-zinc-100 text-zinc-600', pending: 'bg-amber-50 text-amber-800' };
 
-export default function OrderShow({ order, statuses, paymentStatuses, customerWhatsapp, customer, payments = [], paidAt }) {
+export default function OrderShow({ order, statuses, paymentStatuses, customerWhatsapp, customer, payments = [], receipts = [], paidAt, paymentReportedAt }) {
     const tel = order.customer_phone.replace(/[^\d+]/g, '');
 
     return (
@@ -66,6 +67,20 @@ export default function OrderShow({ order, statuses, paymentStatuses, customerWh
             {order.status === 'awaiting_payment' && (
                 <div role="alert" className="mb-5 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
                     <strong>Not paid. Don’t send this order yet.</strong> The customer started paying online but Paystack hasn’t confirmed a payment. It becomes a New order automatically if they pay, and is cancelled after 24 hours if they don’t.
+                </div>
+            )}
+            {order.payment_status === 'unpaid' && order.status !== 'cancelled' && (receipts.some((r) => r.status === 'pending') || paymentReportedAt) && (
+                <div role="status" className="mb-5 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-950">
+                    <p>
+                        <strong>The customer says they’ve paid {order.total} by bank transfer{paymentReportedAt ? ` (${paymentReportedAt})` : ''}.</strong>{' '}
+                        {receipts.some((r) => r.status === 'pending') ? 'Check the receipt below against your bank account, then confirm the payment.' : 'They didn’t upload a receipt. Check your bank account for the transfer, then mark the order as Paid.'}
+                    </p>
+                    <p className="mt-1 text-sky-900/80">Receipts can be faked, so always check your bank first.</p>
+                    {!receipts.some((r) => r.status === 'pending') && (
+                        <button type="button" onClick={() => confirm(`Mark order #${order.number} as paid? Only do this once ${order.total} is in your bank account.`) && router.patch(`/admin/orders/${order.id}`, { payment_status: 'paid' }, { preserveScroll: true })} className="mt-2.5 inline-flex h-9 items-center rounded-lg bg-zinc-900 px-3 text-sm font-semibold text-white hover:bg-zinc-700">
+                            Money received: mark as paid
+                        </button>
+                    )}
                 </div>
             )}
             <div className="grid gap-5 pb-16 sm:gap-6 lg:grid-cols-[1fr_360px] lg:pb-0">
@@ -121,6 +136,7 @@ export default function OrderShow({ order, statuses, paymentStatuses, customerWh
                 </div>
 
                 <div className="space-y-6">
+                    <Receipts receipts={receipts} total={order.total} />
                     <Card title="Customer">
                         <p className="font-medium text-zinc-900">{order.customer_name}</p>
                         <p className="mt-1 text-sm text-zinc-600">{order.customer_phone}</p>
@@ -180,6 +196,7 @@ export default function OrderShow({ order, statuses, paymentStatuses, customerWh
                                 <PaymentStatusBadge status={order.payment_status} label={order.payment_status_label} />
                             </Row>
                             {paidAt && <Row label="Paid on">{paidAt}</Row>}
+                            {paymentReportedAt && <Row label="Customer says paid">{paymentReportedAt}</Row>}
                         </dl>
                         {payments.length > 0 && (
                             <div className="mt-3 border-t border-zinc-100 pt-3">

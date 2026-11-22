@@ -9,8 +9,9 @@ use Illuminate\Support\Facades\Route;
 /*
 | Setup wizard for a fresh upload (closed once installed; see EnsureInstalled).
 */
-Route::prefix('install')->middleware('throttle:30,1')->group(function () {
-    Route::get('/', [\App\Http\Controllers\InstallController::class, 'welcome']);
+Route::post('install/unlock', [\App\Http\Controllers\InstallController::class, 'unlock'])->middleware(['throttle:5,1', \App\Http\Middleware\RequireSetupOwner::class])->name('install.unlock');
+Route::prefix('install')->middleware(['throttle:30,1', \App\Http\Middleware\RequireSetupOwner::class])->group(function () {
+    Route::get('/', [\App\Http\Controllers\InstallController::class, 'welcome'])->name('install.welcome');
     Route::get('database', [\App\Http\Controllers\InstallController::class, 'database']);
     Route::post('database', [\App\Http\Controllers\InstallController::class, 'saveDatabase']);
     Route::get('site', [\App\Http\Controllers\InstallController::class, 'site']);
@@ -29,7 +30,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
     Route::middleware('guest')->group(function () {
         Route::get('login', [AuthController::class, 'showLogin'])->name('login');
-        Route::post('login', [AuthController::class, 'login'])->name('login.store');
+        Route::post('login', [AuthController::class, 'login'])->middleware('throttle:30,1')->name('login.store');
         Route::get('two-factor-challenge', [AuthController::class, 'showTwoFactorChallenge'])->name('two-factor.challenge');
         Route::post('two-factor-challenge', [AuthController::class, 'twoFactorChallenge'])->middleware('throttle:10,1')->name('two-factor.verify');
         Route::get('forgot-password', [AuthController::class, 'showForgotPassword'])->name('password.request');
@@ -39,6 +40,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
     });
 
     Route::middleware(['auth', 'auth.session'])->group(function () {
+        Route::get('confirm-password', fn () => \Inertia\Inertia::render('Admin/Auth/ConfirmPassword'))->name('password.confirm');
+        Route::post('confirm-password', [AuthController::class, 'confirmPassword'])->middleware('throttle:5,1');
         Route::post('logout', [AuthController::class, 'logout'])->name('logout');
 
         Route::get('/', Admin\DashboardController::class)->name('dashboard');
@@ -74,12 +77,19 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
         Route::get('orders', [Admin\OrderController::class, 'index'])->name('orders.index');
         Route::get('orders/export', [Admin\OrderController::class, 'export'])->name('orders.export');
+        Route::get('reviews', [Admin\ReviewController::class, 'index'])->name('reviews.index');
+        Route::post('reviews/bulk', [Admin\ReviewController::class, 'bulk'])->middleware('throttle:30,1')->name('reviews.bulk');
+        Route::put('reviews/settings', [Admin\ReviewController::class, 'settings'])->name('reviews.settings');
+        Route::patch('reviews/{review}', [Admin\ReviewController::class, 'update'])->name('reviews.update');
         Route::get('customers', [Admin\CustomerController::class, 'index'])->name('customers.index');
         Route::get('customers/export', [Admin\CustomerController::class, 'export'])->name('customers.export');
         Route::get('customers/{key}', [Admin\CustomerController::class, 'show'])->where('key', '[pe][0-9a-f]{4,39}')->name('customers.show');
         Route::get('orders/{order}', [Admin\OrderController::class, 'show'])->name('orders.show');
         Route::get('orders/{order}/email/{type}', [Admin\OrderController::class, 'emailPreview'])->whereIn('type', ['placed', 'owner', 'updated'])->name('orders.email');
         Route::patch('orders/{order}', [Admin\OrderController::class, 'update'])->name('orders.update');
+        // Bank-transfer receipts (private files, admins only).
+        Route::get('receipts/{receipt}/file', [Admin\ReceiptController::class, 'file'])->name('receipts.file');
+        Route::patch('receipts/{receipt}', [Admin\ReceiptController::class, 'update'])->name('receipts.update');
 
         Route::patch('coupons/{coupon}/toggle', [Admin\CouponController::class, 'toggle'])->name('coupons.toggle');
         Route::get('coupons/export', [Admin\CouponController::class, 'export'])->name('coupons.export');
@@ -96,6 +106,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
         Route::get('settings', [Admin\SettingsController::class, 'edit'])->name('settings.edit');
         Route::post('settings/email/test', [Admin\SettingsController::class, 'testEmail'])->middleware('throttle:5,1')->name('settings.test-email');
+        Route::put('settings/email', [Admin\SettingsController::class, 'update'])->defaults('section', 'email')->middleware('password.confirm:admin.password.confirm,600')->name('settings.email');
+        Route::put('settings/code', [Admin\SettingsController::class, 'update'])->defaults('section', 'code')->middleware('password.confirm:admin.password.confirm,600')->name('settings.code');
         Route::put('settings/{section}', [Admin\SettingsController::class, 'update'])->name('settings.update');
 
         // One-click updates. Reachable during maintenance mode (bootstrap/app.php).
@@ -103,11 +115,11 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('updates/step/{step}', [Admin\UpdateController::class, 'step'])->name('updates.step');
         Route::post('updates/cancel', [Admin\UpdateController::class, 'cancel'])->name('updates.cancel');
         Route::post('updates/online', [Admin\UpdateController::class, 'online'])->name('updates.online');
-        Route::put('updates/source', [Admin\UpdateController::class, 'source'])->name('updates.source');
+        Route::put('updates/source', [Admin\UpdateController::class, 'source'])->middleware('password.confirm:admin.password.confirm,600')->name('updates.source');
         Route::post('updates/backups/{backup}/restore', [Admin\UpdateController::class, 'restore'])->name('updates.restore');
         Route::post('updates/backups/{backup}/rollback', [Admin\UpdateController::class, 'rollback'])->name('updates.rollback');
-        Route::get('updates/backups/{backup}/database', [Admin\UpdateController::class, 'database'])->name('updates.database');
-        Route::post('updates/agent/connect', [Admin\AgentController::class, 'connect'])->middleware('throttle:10,1')->name('updates.agent.connect');
+        Route::get('updates/backups/{backup}/database', [Admin\UpdateController::class, 'database'])->middleware('password.confirm:admin.password.confirm,600')->name('updates.database');
+        Route::post('updates/agent/connect', [Admin\AgentController::class, 'connect'])->middleware('throttle:10,1')->middleware('password.confirm:admin.password.confirm,600')->name('updates.agent.connect');
         Route::post('updates/agent/disconnect', [Admin\AgentController::class, 'disconnect'])->name('updates.agent.disconnect');
         Route::post('updates/agent/check', [Admin\AgentController::class, 'check'])->middleware('throttle:20,1')->name('updates.agent.check');
         Route::post('updates/agent/run', [Admin\AgentController::class, 'run'])->name('updates.agent.run');
@@ -121,7 +133,10 @@ Route::prefix('admin')->name('admin.')->group(function () {
         });
 
         Route::get('profile', [Admin\ProfileController::class, 'edit'])->name('profile.edit');
-        Route::put('profile', [Admin\ProfileController::class, 'update'])->name('profile.update');
+        // Help Center: step-by-step guides with screenshots (content in resources/js/Pages/Admin/Help/guides.js).
+        Route::inertia('help', 'Admin/Help/Index')->name('help');
+        Route::put('profile', [Admin\ProfileController::class, 'update'])->middleware('throttle:10,1')->name('profile.update');
+        Route::post('profile/verify-email', [Admin\ProfileController::class, 'verifyEmail'])->middleware('throttle:5,1')->name('profile.verify-email');
         Route::put('profile/password', [Admin\ProfileController::class, 'updatePassword'])->name('profile.password');
         // Two-factor sign-in (each change asks for the current password).
         Route::middleware('throttle:10,1')->group(function () {
@@ -146,9 +161,12 @@ Route::get('preview/template/{template}', [Storefront\TemplatePreviewController:
 Route::get('preview/exit', [Storefront\TemplatePreviewController::class, 'exit'])->name('template.exit');
 Route::get('products', [Storefront\ProductController::class, 'index'])->name('products.index');
 Route::get('products/{slug}', [Storefront\ProductController::class, 'show'])->name('products.show');
+// Reviews (anti-spam in App\Services\ReviewGuard; also throttled here).
+Route::get('products/{slug}/reviews', [Storefront\ReviewController::class, 'index'])->middleware('throttle:60,1')->name('reviews.index');
+Route::post('products/{slug}/reviews', [Storefront\ReviewController::class, 'store'])->middleware('throttle:6,1')->name('reviews.store');
 Route::get('categories', [Storefront\CategoryController::class, 'index'])->name('categories.index');
 Route::get('categories/{slug}', [Storefront\CategoryController::class, 'show'])->name('categories.show');
-Route::get('search', [Storefront\ProductController::class, 'search'])->name('search');
+Route::get('search', [Storefront\ProductController::class, 'search'])->middleware('throttle:60,1')->name('search');
 
 // Built-in visitor statistics beacon (CSRF-exempt; see bootstrap/app.php). A neutral
 // address, because ad blockers drop requests to paths like /stats/collect and undercount visitors.
@@ -168,7 +186,12 @@ Route::middleware('shop')->group(function () {
     Route::post('checkout', [Storefront\CheckoutController::class, 'store'])->middleware('throttle:10,1')->name('checkout.store');
 });
 // Customers' order links keep working even if online ordering is later switched off.
+// Straight after checkout: the order just placed in this browser, with no private token in the address (see OrderController).
+Route::get('order/thanks', [Storefront\OrderController::class, 'thanks'])->name('orders.thanks');
 Route::get('order/{token}', [Storefront\OrderController::class, 'show'])->where('token', '[A-Za-z0-9]{40}')->name('orders.show');
+// Bank-transfer receipt upload from the order page.
+Route::post('order/{token}/receipt', [Storefront\ReceiptController::class, 'store'])->where('token', '[A-Za-z0-9]{40}')->middleware('throttle:6,1')->name('orders.receipt');
+Route::post('order/{token}/payment-sent', [Storefront\ReceiptController::class, 'reported'])->where('token', '[A-Za-z0-9]{40}')->middleware('throttle:10,1')->name('orders.payment-sent');
 
 // Paystack online payments. Nothing is marked paid until the server has verified it with Paystack.
 Route::post('order/{token}/pay', [Storefront\PaystackController::class, 'pay'])->where('token', '[A-Za-z0-9]{40}')->middleware('throttle:10,1')->name('orders.pay');

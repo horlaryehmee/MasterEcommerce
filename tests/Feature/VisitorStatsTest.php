@@ -34,6 +34,30 @@ class VisitorStatsTest extends TestCase
         return $pid;
     }
 
+    public function test_private_order_paths_and_referrers_are_redacted_before_storage(): void
+    {
+        $private = '/order/'.Str::random(40);
+        $this->pageview((string) Str::uuid(), (string) Str::uuid(), $private);
+        $this->pageview((string) Str::uuid(), (string) Str::uuid(), '/products', ['ref' => 'https://shop.test'.$private]);
+        $this->assertDatabaseHas('stats_pageviews', ['path' => '/private']);
+        $this->assertDatabaseHas('stats_sessions', ['referrer_url' => '/private']);
+        $this->assertDatabaseMissing('stats_sessions', ['entry_path' => $private]);
+    }
+
+    public function test_historical_link_review_and_targeted_rotation(): void
+    {
+        $order = Order::create(['customer_name' => 'Customer', 'customer_phone' => '08012345678', 'total' => 100, 'subtotal' => 100, 'currency_code' => 'NGN', 'payment_method' => 'delivery']);
+        $private = '/order/'.$order->token;
+        $this->pageview((string) Str::uuid(), (string) Str::uuid(), '/products');
+        DB::table('stats_pageviews')->update(['path' => $private]);
+        $this->artisan('security:review-analytics-links')->assertSuccessful();
+        $this->assertDatabaseHas('stats_pageviews', ['path' => $private]);
+        $this->artisan('security:review-analytics-links', ['--redact' => true])->assertSuccessful();
+        $this->assertDatabaseMissing('stats_pageviews', ['path' => $private]);
+        $this->artisan('security:rotate-order-link', ['number' => $order->number])->assertSuccessful();
+        $this->assertNotSame($order->token, $order->fresh()->token);
+    }
+
     public function test_page_views_create_visitors_and_sessions(): void
     {
         $vid = (string) Str::uuid();

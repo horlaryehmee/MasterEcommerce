@@ -80,7 +80,7 @@ class CartController extends StorefrontController
 
     public function destroy(string $line): RedirectResponse
     {
-        $this->cart->setLine($line, 0);
+        $this->cart->remove($line);
 
         return back();
     }

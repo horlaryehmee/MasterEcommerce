@@ -3,24 +3,8 @@ import { Bell, BellOff, BellRing, Laptop, Send, Smartphone, Trash2 } from 'lucid
 import { useEffect, useState } from 'react';
 import { InstallApp } from '@/Components/InstallApp';
 import { Badge, Button, Card } from '@/Components/Admin/ui';
-import { isIOS, isStandalone } from '@/lib/pwa';
-
-function keyToBytes(base64url) {
-    const pad = '='.repeat((4 - (base64url.length % 4)) % 4);
-    const raw = atob((base64url + pad).replace(/-/g, '+').replace(/_/g, '/'));
-    return Uint8Array.from(raw, (c) => c.charCodeAt(0));
-}
-
-async function sha256(text) {
-    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-    return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
-}
-
-async function registration() {
-    const url = document.querySelector('meta[name="sw-url"]')?.content;
-    if (url && !(await navigator.serviceWorker.getRegistration('/'))) await navigator.serviceWorker.register(url, { scope: '/' });
-    return navigator.serviceWorker.ready;
-}
+import { isIOS, isStandalone, store } from '@/lib/pwa';
+import { OFF_KEY, registration, sha256, subscribe } from '@/lib/push';
 
 /** Phone/desktop notifications for new orders, turned on per device. */
 export default function NotificationsCard({ push }) {
@@ -46,8 +30,8 @@ export default function NotificationsCard({ push }) {
             const result = await Notification.requestPermission();
             setPermission(result);
             if (result !== 'granted') return;
-            const reg = await registration();
-            const sub = (await reg.pushManager.getSubscription()) || (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyToBytes(push.publicKey) }));
+            const sub = await subscribe(push.publicKey);
+            store.set(OFF_KEY, '');
             setCurrent(await sha256(sub.endpoint));
             router.post('/admin/push-subscriptions', sub.toJSON(), { preserveScroll: true });
         } catch (e) {
@@ -62,6 +46,8 @@ export default function NotificationsCard({ push }) {
         try {
             const reg = await registration();
             const sub = await reg.pushManager.getSubscription();
+            // Remember on this device, so it doesn't turn itself back on at the next visit.
+            store.set(OFF_KEY, '1');
             if (sub) {
                 router.delete('/admin/push-subscriptions', { data: { endpoint: sub.endpoint }, preserveScroll: true });
                 await sub.unsubscribe();

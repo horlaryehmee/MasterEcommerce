@@ -64,14 +64,15 @@ function session(touch = true) {
 
 function send(payload) {
     if (!enabled) return;
-    const body = JSON.stringify({ vid: visitorId(), ...payload });
+    const token = document.querySelector('meta[name="stats-csrf"]')?.content;
+    if (!token) return;
+    const body = JSON.stringify({ _token: token, vid: visitorId(), ...payload });
     try {
-        // text/plain keeps it a "simple" request; the server accepts it.
-        if (navigator.sendBeacon && navigator.sendBeacon(ENDPOINT, new Blob([body], { type: 'text/plain' }))) return;
+        if (navigator.sendBeacon && navigator.sendBeacon(ENDPOINT, new Blob([body], { type: 'application/json' }))) return;
     } catch {
         /* fall through to fetch */
     }
-    fetch(ENDPOINT, { method: 'POST', body, keepalive: true, headers: { 'Content-Type': 'text/plain' }, credentials: 'same-origin' }).catch(() => {});
+    fetch(ENDPOINT, { method: 'POST', body, keepalive: true, headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin' }).catch(() => {});
 }
 
 function utm() {
@@ -86,6 +87,7 @@ function utm() {
 
 /** Context so the server can start a session even if an event arrives before the page view. */
 function context(sess) {
+    if (/\/(order|payments)\//i.test(location.pathname)) return { sid: sess.sid, path: '/private' };
     return { sid: sess.sid, path: location.pathname, ...(sess.isNew ? { ref: document.referrer || null, utm: utm(), w: screen.width } : {}) };
 }
 

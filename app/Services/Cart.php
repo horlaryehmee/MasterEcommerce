@@ -93,9 +93,9 @@ class Cart
         $this->coupon = false;
     }
 
-    public function remove(Product $product, ?ProductVariant $variant = null): void
+    public function remove(Product|string $product, ?ProductVariant $variant = null): void
     {
-        $this->set($product, 0, $variant);
+        $this->setLine(is_string($product) ? $product : self::key($product, $variant), 0);
     }
 
     public function clear(): void
@@ -303,6 +303,8 @@ class Cart
             'subtotal' => Money::format($this->subtotal(), $settings),
             'coupon' => $coupon ? self::couponArray($coupon, $settings) : null,
             'total' => Money::format($subtotal, $settings),
+            // Show a coupon field (cart drawer) only while the shop has a coupon switched on.
+            'coupons_enabled' => $items !== [] && ($coupon !== null || Coupons::enabled()),
             // A free shipping coupon makes the "add X more" hint pointless.
             'freeDelivery' => $threshold > 0 && $items !== [] && ! ($coupon['free_shipping'] ?? false) ? [
                 'threshold' => Money::format($threshold, $settings),

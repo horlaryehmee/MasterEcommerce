@@ -66,6 +66,7 @@ class Order extends Model
             'delivery_fee' => 'decimal:2',
             'total' => 'decimal:2',
             'paid_at' => 'datetime',
+            'payment_reported_at' => 'datetime',
         ];
     }
 
@@ -83,6 +84,53 @@ class Order extends Model
         static::created(function (Order $order) {
             $order->forceFill(['number' => (string) (1000 + $order->id)])->saveQuietly();
         });
+        // Marked paid or cancelled some other way (manually, in bulk, Paystack): settle waiting receipts.
+        static::updated(function (Order $order) {
+            $settle = match (true) {
+                $order->wasChanged('payment_status') && $order->payment_status === 'paid' => ['status' => 'approved', 'note' => null],
+                $order->wasChanged('status') && $order->status === 'cancelled' => ['status' => 'rejected', 'note' => 'Order cancelled.'],
+                default => null,
+            };
+            if ($settle) {
+                $order->receipts()->where('status', 'pending')->update($settle + ['reviewed_at' => now()]);
+            }
+        });
+        // Receipt rows go with the order (database cascade); their private files go too.
+        static::deleting(function (Order $order) {
+            $paths = $order->receipts()->pluck('path')->all();
+            if ($paths) {
+                \Illuminate\Support\Facades\Storage::disk(PaymentReceipt::DISK)->delete($paths);
+            }
+        });
+    }
+
+    public function receipts(): HasMany
+    {
+        return $this->hasMany(PaymentReceipt::class)->latest('id');
+    }
+
+    /** Bank transfer, and the customer hasn't yet said they've paid: show the payment step. */
+    public function needsTransferStep(): bool
+    {
+        return $this->payment_method === 'bank_transfer'
+            && $this->payment_status === 'unpaid'
+            && $this->status !== 'cancelled'
+            && ! $this->payment_reported_at;
+    }
+
+    /** Unpaid orders where the customer says they've paid (pressed the button or uploaded a receipt). */
+    public function scopePaymentToCheck(Builder $query): Builder
+    {
+        return $query->where('payment_status', 'unpaid')->where('status', '!=', 'cancelled')
+            ->where(fn ($q) => $q->whereNotNull('payment_reported_at')->orWhereHas('receipts', fn ($r) => $r->where('status', 'pending')));
+    }
+
+    /** Bank transfer, not yet paid or cancelled. */
+    public function acceptsReceipts(): bool
+    {
+        return $this->payment_method === 'bank_transfer'
+            && $this->payment_status === 'unpaid'
+            && $this->status !== 'cancelled';
     }
 
     public function items(): HasMany

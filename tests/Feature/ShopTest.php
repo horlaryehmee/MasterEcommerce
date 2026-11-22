@@ -149,7 +149,7 @@ class ShopTest extends TestCase
         $response = $this->post('/checkout', $this->checkoutData(['shipping_method' => $lagos->methods->first()->id, 'postcode' => '100271']));
 
         $order = Order::query()->with('items')->sole();
-        $response->assertRedirect($order->url());
+        $response->assertRedirect(route('orders.thanks'));
         $this->assertSame('1001', $order->number);
         $this->assertSame('20000.00', $order->subtotal);
         $this->assertSame('3000.00', $order->delivery_fee);

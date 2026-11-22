@@ -28,11 +28,30 @@ class Tracking
         'tiktok_pixel_id' => '/^[A-Z0-9]{10,30}$/',
     ];
 
+    public static function containsPrivateUrl(string $value): bool
+    {
+        return preg_match('~/(?:order/|payments/|admin/reset-password/)[^?#\s]*~i', rawurldecode($value)) === 1;
+    }
+
+    /**
+     * Pages whose address carries a credential (order token, reset token) or that belong to the admin
+     * or installer: no third-party pixels. /order/thanks shows the order just placed WITHOUT a token
+     * in its address, so purchases can still be measured; checkout has no credential in its address.
+     */
+    public static function privatePage(Request $request): bool
+    {
+        if ($request->is('order/thanks')) {
+            return false;
+        }
+
+        return $request->is('admin', 'admin/*', 'order/*', 'payments/*', 'install', 'install/*');
+    }
+
     /** Built-in pixels load on storefront pages, not in the admin, and not for the logged-in owner unless allowed. */
     public static function enabled(Request $request, ?BusinessSetting $s = null): bool
     {
         $s ??= BusinessSetting::current();
-        if ($request->is('admin', 'admin/*')) {
+        if (self::privatePage($request)) {
             return false;
         }
 

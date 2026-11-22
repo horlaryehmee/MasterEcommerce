@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Cache;
  */
 class StorefrontCache
 {
-    public const KEYS = ['storefront.shared', 'storefront.sitemap'];
+    public const KEYS = ['storefront.shared', 'storefront.sitemap', 'storefront.home.reviews'];
 
     public static function remember(string $key, \Closure $callback): mixed
     {

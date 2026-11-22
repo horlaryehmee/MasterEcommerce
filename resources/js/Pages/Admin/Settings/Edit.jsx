@@ -1081,7 +1081,7 @@ function CustomCode({ s }) {
                 form.put('/admin/settings/code', { preserveScroll: true });
             }}
         >
-            <Card title="Custom code" description="Added to every storefront page exactly as written: chat widgets, other pixels, cookie consent tools, extra meta or link tags. Not added to the admin.">
+            <Card title="Custom code" description="Add scripts and markup to public storefront pages. Checkout, payments, private orders and admin pages are excluded.">
                 <div className="space-y-5">
                     <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">Only paste code from sources you trust. Broken code can break your website’s layout or behaviour; remove it here to undo.</p>
                     {area('head_code', 'Header code (inside <head>)', 'For <meta>, <link>, <style> and most tracking scripts.')}

@@ -15,11 +15,9 @@ class DemoAdminSeeder extends Seeder
 {
     public const EMAIL = 'admin@example.com';
 
-    public const PASSWORD = 'password';
-
     public function run(): void
     {
-        if (! app()->environment('local', 'testing')) {
+        if (DemoSeeder::$confirmed || ! app()->environment('local', 'testing')) {
             $this->command?->warn('Skipping demo admin (not a local environment). Run: php artisan catalog:create-admin');
 
             return;
@@ -32,10 +30,10 @@ class DemoAdminSeeder extends Seeder
         User::query()->create([
             'name' => 'Demo Admin',
             'email' => self::EMAIL,
-            'password' => self::PASSWORD,
+            'password' => \Illuminate\Support\Str::password(40),
             'email_verified_at' => now(),
         ]);
 
-        $this->command?->warn('Demo admin created for local use: '.self::EMAIL.' / '.self::PASSWORD);
+        $this->command?->warn('Set a local administrator password with php artisan catalog:create-admin.');
     }
 }

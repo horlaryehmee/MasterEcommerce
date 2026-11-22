@@ -56,14 +56,7 @@ jobs:
       - name: Create package
         run: |
           NAME="catalog-${GITHUB_REF_NAME}.zip"
-          # Caches generated on this build machine must not ship.
-          rm -f bootstrap/cache/*.php
-          zip -rq "$NAME" . \
-            -x '.git/*' '.github/*' 'node_modules/*' 'tests/*' '.env' '.env.backup' 'modules/*' 'extensions/*' \
-               'storage/logs/*.log' 'storage/framework/cache/data/*' 'storage/framework/sessions/*' \
-               'storage/framework/views/*.php' 'storage/app/public/*' 'storage/app/updates/*' \
-               'storage/app/installed.json' 'storage/app/installing.json' 'storage/app/agent/*' \
-               'public/storage' 'public/hot' '*.zip'
+          php artisan release:package core --out=.
           sha256sum "$NAME" > "$NAME.sha256"
           echo "PACKAGE=$NAME" >> "$GITHUB_ENV"
 

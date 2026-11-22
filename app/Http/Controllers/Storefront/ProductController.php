@@ -84,8 +84,11 @@ class ProductController extends StorefrontController
             ->product($product)
             ->breadcrumbs($crumbs);
 
+        $reviews = $isPublic ? ReviewController::forProduct($product) : null;
+
         return $this->page('Storefront/ProductShow', [
             'product' => $product->toDetail(),
+            'reviews' => $reviews,
             'whatsappUrl' => WhatsApp::productLink($product),
             'related' => $related->map->toCard()->values(),
             'isPreview' => ! $isPublic,

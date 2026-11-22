@@ -12,6 +12,7 @@
 */
 
 return [
+    'setup_token' => env('INSTALL_SETUP_TOKEN'),
 
     // Who built and maintains this software: shown in the store footer, the admin,
     // the login and setup pages, and the HTML "author" tag.
@@ -41,6 +42,8 @@ return [
         'categories' => ['lg' => 1200, 'sm' => 600],
         'banners' => ['lg' => 1920, 'md' => 1280, 'sm' => 800],
         'branding' => ['lg' => 800, 'sm' => 256],
+        // Bank-transfer receipts (private disk): one size, big enough to read every digit.
+        'receipts' => ['lg' => 2000],
     ],
 
     // WebP quality (60-100) for photos. 90 is visually indistinguishable from

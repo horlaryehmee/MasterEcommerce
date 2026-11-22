@@ -56,6 +56,7 @@ class Installer
         $env = (string) file_get_contents($base.'/.env.example');
         $env = self::setValues($env, [
             'APP_KEY' => 'base64:'.base64_encode(random_bytes(32)),
+            'INSTALL_SETUP_TOKEN' => bin2hex(random_bytes(32)),
             'SESSION_DRIVER' => 'file',
             'CACHE_STORE' => 'file',
             'DB_DATABASE' => '',

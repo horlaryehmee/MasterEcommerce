@@ -64,6 +64,23 @@ class AuthTest extends TestCase
         $this->assertGuest();
     }
 
+    public function test_guessing_one_account_from_many_addresses_is_also_limited(): void
+    {
+        $user = $this->admin();
+
+        // 20 wrong passwords spread over 20 addresses (each one stays under its own limit).
+        foreach (range(1, 20) as $i) {
+            $this->withServerVariables(['REMOTE_ADDR' => "198.51.100.{$i}"])
+                ->post('/admin/login', ['email' => $user->email, 'password' => 'wrong-'.$i]);
+        }
+
+        // Even the right password from a new address now waits.
+        $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.99'])
+            ->post('/admin/login', ['email' => $user->email, 'password' => 'password'])
+            ->assertSessionHasErrors('email');
+        $this->assertGuest();
+    }
+
     public function test_password_reset_flow(): void
     {
         Notification::fake();
@@ -106,7 +123,14 @@ class AuthTest extends TestCase
         $user = $this->admin();
         $this->actingAs($user);
 
-        $this->put('/admin/profile', ['name' => 'Owner', 'email' => 'new@example.com'])->assertSessionHasNoErrors();
+        $input = ['name' => 'Owner', 'email' => 'new@example.com'];
+        $this->put('/admin/profile', $input)->assertSessionHasErrors('current_password');
+        $this->put('/admin/profile', $input + ['current_password' => 'password'])->assertSessionHasNoErrors();
+        $this->assertSame('owner@example.com', $user->fresh()->email);
+        $this->post('/admin/profile/verify-email', ['code' => '00000000'])->assertSessionHasErrors('code');
+        $messages = app('mail.manager')->mailer()->getSymfonyTransport()->messages();
+        preg_match('/verification code is (\d{8})/', $messages->last()->getOriginalMessage()->getTextBody(), $match);
+        $this->post('/admin/profile/verify-email', ['code' => $match[1]])->assertSessionHasNoErrors();
         $this->assertSame('new@example.com', $user->fresh()->email);
 
         $this->put('/admin/profile/password', ['current_password' => 'wrong', 'password' => 'Another123', 'password_confirmation' => 'Another123'])
@@ -115,6 +139,24 @@ class AuthTest extends TestCase
         $this->put('/admin/profile/password', ['current_password' => 'password', 'password' => 'Another123', 'password_confirmation' => 'Another123'])
             ->assertSessionHasNoErrors();
         $this->assertTrue(Hash::check('Another123', $user->fresh()->password));
+    }
+
+    public function test_update_source_requires_recent_password_and_credentials_are_not_flashed(): void
+    {
+        $this->actingAsAdmin();
+        $this->put('/admin/updates/source', ['repository' => 'some/store'])->assertRedirect(route('admin.password.confirm'));
+        $this->post('/admin/confirm-password', ['current_password' => 'password'])->assertSessionHasNoErrors();
+        $this->put('/admin/updates/source', ['token' => str_repeat('x', 501)])->assertSessionHasErrors('token')
+            ->assertSessionMissing('_old_input.token');
+    }
+
+    public function test_setup_routes_require_owner_verification(): void
+    {
+        config(['catalog.setup_token' => str_repeat('a', 64)]);
+        $this->get('/install/database')->assertForbidden();
+        $this->post('/install/unlock', ['setup_token' => 'incorrect'])->assertSessionHasErrors('setup_token');
+        $this->post('/install/unlock', ['setup_token' => config('catalog.setup_token')])->assertRedirect(route('install.welcome'));
+        $this->get('/install/database')->assertOk();
     }
 
     public function test_there_is_no_public_registration(): void

@@ -35,7 +35,7 @@ class HandleInertiaRequests extends Middleware
 
     public function version(Request $request): ?string
     {
-        return parent::version($request);
+        return (parent::version($request) ?? 'app').(Tracking::privatePage($request) ? '-private' : '-public');
     }
 
     public function share(Request $request): array
@@ -73,11 +73,20 @@ class HandleInertiaRequests extends Middleware
             'admin' => $isAdmin && $request->user() ? fn () => [
                 'shop_enabled' => BusinessSetting::current()->shop_enabled,
                 'new_orders' => Order::query()->where('status', 'pending')->count(),
+                'pending_reviews' => \App\Models\Review::query()->where('status', 'pending')->count(),
+                // Bank-transfer orders the customer says are paid (button or receipt), waiting for the owner to check.
+                'payments_to_check' => Order::query()->paymentToCheck()->count(),
                 // From the last cached check only; never contacts GitHub here.
                 'update_available' => (bool) (app(Updater::class)->cachedStatus()['available'] ?? false),
                 'version' => app(Updater::class)->currentVersion(),
                 // Shown on every admin page until Paystack is switched to live keys.
                 'paystack_test_mode' => app(\App\Services\Paystack::class)->inTestMode(),
+                // Notifications: lets each device turn itself on (or prompt) on any admin page.
+                'push' => [
+                    'publicKey' => app(\App\Services\WebPush::class)->publicKey(),
+                    'on' => $request->user()->pushSubscriptions()->active()->pluck('endpoint_hash'),
+                    'off' => $request->user()->pushSubscriptions()->whereNotNull('disabled_at')->pluck('endpoint_hash'),
+                ],
             ] : null,
         ];
     }

@@ -47,18 +47,27 @@ class PaystackController extends Controller
         $payment = preg_match(self::REFERENCE, $reference) ? Payment::query()->where('reference', $reference)->with('order')->first() : null;
         abort_unless($payment && $payment->order, 404);
 
+        $order = $payment->order;
         $payment = $this->paystack->verify($payment);
+        if ($payment === null) {
+            return redirect()->route('orders.show', $order->token)->with('error', 'Payment confirmation is temporarily unavailable. Please check this order again shortly.');
+        }
         // The customer pressed "Cancel" on Paystack. Paystack may still list a bank
         // transfer as waiting; we treat it as not paid (a transfer that does arrive
         // later is still recorded through the webhook).
         if ($request->boolean('cancelled') && $payment->status === 'pending') {
-            $payment->forceFill(['status' => 'abandoned', 'message' => 'Cancelled by the customer on Paystack.'])->save();
+            Payment::query()->whereKey($payment->id)->where('status', 'pending')
+                ->update(['status' => 'abandoned', 'message' => 'Cancelled by the customer on Paystack.']);
+            $payment->refresh();
         }
-        $order = $payment->order()->first();
+        $order->refresh();
         $to = redirect()->route('orders.show', $order->token);
 
+        // Paid in this browser (just placed here): the tokenless thank-you address, where pixels can record the purchase.
+        $ownBrowser = collect((array) $request->session()->get('orders', []))->last() === $order->token;
+
         return match ($payment->status) {
-            'success' => $to->with('success', 'Payment received. Thank you!')->with('analytics', [\App\Support\Tracking::purchase($order)]),
+            'success' => ($ownBrowser ? redirect()->route('orders.thanks') : $to)->with('success', 'Payment received. Thank you!')->with('analytics', [\App\Support\Tracking::purchase($order)]),
             'pending' => $to,
             'flagged' => $to->with('error', 'We received a payment that doesn’t match this order. We’ll check it and contact you.'),
             'abandoned' => $to->with('error', 'Payment cancelled. You haven’t been charged.'),
@@ -85,10 +94,11 @@ class PaystackController extends Controller
         if (data_get($event, 'event') === 'charge.success' && preg_match(self::REFERENCE, $reference)) {
             $payment = Payment::query()->where('reference', $reference)->first();
             // Don't take the webhook's word for it either: verify with the API.
-            $payment && $this->paystack->verify($payment);
+            if ($payment && $this->paystack->verify($payment) === null) {
+                return response('Verification unavailable', 503);
+            }
         }
 
-        // Always 200 for a correctly signed event, so Paystack stops retrying it.
         return response('OK', 200);
     }
 }

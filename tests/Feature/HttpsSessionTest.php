@@ -20,12 +20,42 @@ class HttpsSessionTest extends TestCase
 
     public function test_https_behind_a_proxy_is_recognised_and_not_redirected(): void
     {
-        config(['app.url' => 'https://shop.example.com']);
+        config(['app.url' => 'https://shop.example.com', 'trustedproxy.proxies' => ['10.0.0.5']]);
 
         $this->withServerVariables(['REMOTE_ADDR' => '10.0.0.5'])
             ->withHeader('X-Forwarded-Proto', 'https')
             ->get('http://shop.example.com/admin/login')
             ->assertOk();
+    }
+
+    public function test_without_configured_proxies_https_from_a_hosting_proxy_still_works(): void
+    {
+        // Typical cPanel + Cloudflare/LiteSpeed: HTTPS ends at the proxy. Must not redirect forever.
+        config(['app.url' => 'https://shop.example.com', 'trustedproxy.proxies' => []]);
+
+        $this->withServerVariables(['REMOTE_ADDR' => '172.70.1.1'])
+            ->withHeader('X-Forwarded-Proto', 'https')
+            ->withHeader('X-Forwarded-For', '203.0.113.9')
+            ->get('http://shop.example.com/admin/login')
+            ->assertOk();
+
+        // ...but the forwarded client IP is still ignored, so IP limits can't be dodged.
+        $this->assertSame('172.70.1.1', request()->ip());
+    }
+
+    public function test_configured_proxies_give_the_real_visitor_ip(): void
+    {
+        config(['trustedproxy.proxies' => ['10.0.0.5']]);
+        $this->withServerVariables(['REMOTE_ADDR' => '10.0.0.5'])->withHeader('X-Forwarded-For', '203.0.113.9')->get('/admin/login');
+        $this->assertSame('203.0.113.9', request()->ip());
+    }
+
+    public function test_direct_http_requests_cannot_override_the_transport(): void
+    {
+        config(['app.url' => 'https://shop.example.com', 'trustedproxy.proxies' => ['10.0.0.5']]);
+        $this->withServerVariables(['REMOTE_ADDR' => '192.0.2.1'])
+            ->withHeader('X-Forwarded-Proto', 'https')
+            ->get('http://shop.example.com/admin/login')->assertRedirect('https://shop.example.com/admin/login');
     }
 
     public function test_forwarded_client_ip_is_not_trusted(): void

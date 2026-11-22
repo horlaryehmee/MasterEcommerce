@@ -187,16 +187,23 @@ class Paystack
             throw new RuntimeException('The order total is too small to pay online.');
         }
 
-        $payment = $order->payments()->create([
-            'provider' => 'paystack',
-            // Unguessable, unique, and tied to the order number for easy support lookups.
-            'reference' => 'NX'.$order->number.'-'.Str::upper(Str::random(24)),
-            'amount' => $amount,
-            'currency' => $currency,
-            'status' => 'pending',
-            'mode' => $this->mode($s),
-            'ip_address' => $ip,
-        ]);
+        $payment = DB::transaction(function () use ($order, $s, $amount, $currency, $ip) {
+            $order = Order::query()->lockForUpdate()->findOrFail($order->id);
+            if (! $order->awaitsOnlinePayment()) {
+                throw new RuntimeException('This order can no longer be paid online.');
+            }
+
+            return $order->payments()->create([
+                'provider' => 'paystack',
+                // Unguessable, unique, and tied to the order number for easy support lookups.
+                'reference' => 'NX'.$order->number.'-'.Str::upper(Str::random(24)),
+                'amount' => $amount,
+                'currency' => $currency,
+                'status' => 'pending',
+                'mode' => $this->mode($s),
+                'ip_address' => $ip,
+            ]);
+        });
 
         try {
             $response = $this->send($order, $payment, $amount, $currency);
@@ -240,12 +247,16 @@ class Paystack
 
     /**
      * Ask Paystack for the transaction's real outcome and record it.
-     * Returns the payment (fresh), whatever its status.
+     * Returns null when verification is unavailable and should be retried.
      */
-    public function verify(Payment $payment): Payment
+    public function verify(Payment $payment): ?Payment
     {
         if ($payment->status === 'success') {
             return $payment;
+        }
+
+        if (! $this->secretKey(null, $payment->mode)) {
+            return null;
         }
 
         try {
@@ -254,20 +265,18 @@ class Paystack
         } catch (ConnectionException $e) {
             Log::warning('Paystack verify unreachable', ['reference' => $payment->reference, 'error' => $e->getMessage()]);
 
-            return $payment;
+            return null;
         }
 
         // Paystack has no transaction with this reference: the payment page was never completed.
         if (in_array($response->status(), [400, 404], true) && str_contains(strtolower((string) $response->json('message')), 'not found')) {
-            $payment->forceFill(['status' => 'abandoned', 'message' => 'Payment page closed before paying.', 'verified_at' => now()])->save();
-
-            return $payment;
+            return $this->settle($payment, ['status' => 'abandoned', 'gateway_response' => 'Payment page closed before paying.']);
         }
 
-        if (! $response->successful() || ! $response->json('status') || ! is_array($response->json('data'))) {
+        if (! $response->successful() || ! $response->json('status') || ! is_string($response->json('data.status'))) {
             Log::warning('Paystack verify failed', ['reference' => $payment->reference, 'http' => $response->status(), 'message' => $response->json('message')]);
 
-            return $payment;
+            return null;
         }
 
         return $this->settle($payment, $response->json('data'));

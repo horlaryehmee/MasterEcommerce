@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\PushSubscription;
 use App\Services\AdminAlerts;
 use App\Services\WebPush;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -13,10 +14,16 @@ use Illuminate\Validation\ValidationException;
 /** Turning phone/desktop notifications on and off, per device. */
 class PushController extends Controller
 {
-    /** A device turned notifications on (the browser's PushSubscription.toJSON()). */
-    public function store(Request $request): RedirectResponse
+    /**
+     * A device turned notifications on (the browser's PushSubscription.toJSON()).
+     * `silent`: sent automatically when the admin opens the dashboard on a device
+     * that already allows notifications. It never re-enables a device that was
+     * switched off from the device list, and sends no test notification.
+     */
+    public function store(Request $request): RedirectResponse|JsonResponse
     {
         $data = $request->validate([
+            'silent' => ['sometimes', 'boolean'],
             'endpoint' => ['required', 'string', 'max:1000', 'url:https'],
             'keys.p256dh' => ['required', 'string', 'regex:/^[A-Za-z0-9_-]{86,88}={0,2}$/'],
             'keys.auth' => ['required', 'string', 'regex:/^[A-Za-z0-9_-]{21,24}={0,2}$/'],
@@ -26,16 +33,28 @@ class PushController extends Controller
             throw ValidationException::withMessages(['endpoint' => 'This browser’s notification service isn’t supported. Try Chrome, Edge, Firefox or Safari.']);
         }
 
+        $silent = $request->boolean('silent');
+        $hash = hash('sha256', $data['endpoint']);
+        $existing = PushSubscription::query()->where('endpoint_hash', $hash)->first();
+        if ($silent && $existing?->disabled_at) {
+            return response()->json(['ok' => false, 'disabled' => true]);
+        }
+
         $sub = PushSubscription::query()->updateOrCreate(
-            ['endpoint_hash' => hash('sha256', $data['endpoint'])],
+            ['endpoint_hash' => $hash],
             [
                 'user_id' => $request->user()->id,
                 'endpoint' => $data['endpoint'],
                 'public_key' => rtrim($data['keys']['p256dh'], '='),
                 'auth_token' => rtrim($data['keys']['auth'], '='),
                 'device' => $this->deviceName((string) $request->userAgent()),
+                'disabled_at' => null,
             ],
         );
+
+        if ($silent) {
+            return response()->json(['ok' => true]);
+        }
 
         $sent = app(AdminAlerts::class)->test($sub);
 
@@ -44,22 +63,27 @@ class PushController extends Controller
             : 'Notifications were turned on, but the test didn’t arrive. Check this device’s notification settings.');
     }
 
-    /** Remove a device (by id from the list, or this device by its endpoint). */
+    /**
+     * Stop notifications: from the device list (by id: switched off, so that
+     * device won't quietly turn itself back on), or on this device (by endpoint).
+     */
     public function destroy(Request $request): RedirectResponse
     {
         $request->validate(['id' => ['nullable', 'integer'], 'endpoint' => ['nullable', 'string', 'max:1000']]);
-        PushSubscription::query()
-            ->where('user_id', $request->user()->id)
-            ->when($request->input('id'), fn ($q, $id) => $q->whereKey($id))
-            ->when(! $request->input('id'), fn ($q) => $q->where('endpoint_hash', hash('sha256', (string) $request->input('endpoint'))))
-            ->delete();
+        $mine = PushSubscription::query()->where('user_id', $request->user()->id);
+
+        if ($request->input('id')) {
+            $mine->whereKey($request->input('id'))->update(['disabled_at' => now()]);
+        } else {
+            $mine->where('endpoint_hash', hash('sha256', (string) $request->input('endpoint')))->delete();
+        }
 
         return back()->with('success', 'Notifications turned off for that device.');
     }
 
     public function test(Request $request): RedirectResponse
     {
-        $subs = PushSubscription::query()->where('user_id', $request->user()->id)->get();
+        $subs = PushSubscription::query()->active()->where('user_id', $request->user()->id)->get();
         $sent = $subs->filter(fn ($s) => app(AdminAlerts::class)->test($s))->count();
 
         return back()->with($sent ? 'success' : 'error', $sent

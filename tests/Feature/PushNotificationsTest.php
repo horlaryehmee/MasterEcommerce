@@ -182,7 +182,8 @@ class PushNotificationsTest extends TestCase
         $this->assertStringNotContainsString($sub->auth_token, $response->getContent());
 
         $this->delete('/admin/push-subscriptions', ['id' => $sub->id])->assertSessionHas('success');
-        $this->assertSame(0, PushSubscription::count());
+        // Switched off (kept, so the device doesn't quietly turn itself back on).
+        $this->assertSame(0, PushSubscription::query()->active()->count());
     }
 
     public function test_service_worker_shows_notifications_and_opens_only_this_site(): void
@@ -203,5 +204,50 @@ class PushNotificationsTest extends TestCase
         $pem = "-----BEGIN PUBLIC KEY-----\n".chunk_split(base64_encode(hex2bin('3059301306072a8648ce3d020106082a8648ce3d030107034200').$point), 64, "\n")."-----END PUBLIC KEY-----\n";
 
         return openssl_verify($signed, $der, $pem, OPENSSL_ALGO_SHA256) === 1;
+    }
+
+    public function test_a_device_that_already_allows_notifications_turns_on_silently(): void
+    {
+        Http::fake(['*' => Http::response('', 201)]);
+        $keys = $this->browserKeys();
+
+        $this->actingAs($this->admin)
+            ->postJson('/admin/push-subscriptions', ['endpoint' => self::ENDPOINT, 'keys' => $keys, 'silent' => true])
+            ->assertOk()->assertJson(['ok' => true]);
+
+        $this->assertSame(1, PushSubscription::query()->active()->count());
+        // Silent: no test notification.
+        Http::assertNothingSent();
+
+        // Every admin page knows this device is on (so it won't prompt).
+        $this->get('/admin')->assertInertia(fn (Assert $p) => $p
+            ->where('admin.push.on', [hash('sha256', self::ENDPOINT)])
+            ->where('admin.push.publicKey', app(WebPush::class)->publicKey()));
+    }
+
+    public function test_a_device_switched_off_from_the_list_stays_off_until_turned_on_on_it(): void
+    {
+        Http::fake(['*' => Http::response('', 201)]);
+        $keys = $this->browserKeys();
+        $this->actingAs($this->admin)->post('/admin/push-subscriptions', ['endpoint' => self::ENDPOINT, 'keys' => $keys]);
+        $sub = PushSubscription::firstOrFail();
+
+        $this->delete('/admin/push-subscriptions', ['id' => $sub->id]);
+        $this->assertNotNull($sub->fresh()->disabled_at);
+        $this->get('/admin')->assertInertia(fn (Assert $p) => $p->where('admin.push.on', [])->where('admin.push.off', [hash('sha256', self::ENDPOINT)]));
+        $this->get('/admin/profile')->assertInertia(fn (Assert $p) => $p->has('push.devices', 0));
+
+        // The device tries to turn itself back on quietly: refused.
+        $this->postJson('/admin/push-subscriptions', ['endpoint' => self::ENDPOINT, 'keys' => $keys, 'silent' => true])->assertJson(['ok' => false, 'disabled' => true]);
+        $this->assertNotNull($sub->fresh()->disabled_at);
+
+        // Switched-off devices get nothing.
+        Http::fake(['*' => Http::response('', 201)]);
+        $this->placeOrder();
+        Http::assertNotSent(fn ($r) => str_contains($r->url(), 'fcm.googleapis.com'));
+
+        // Tapping "Turn on" on that device turns it back on.
+        $this->actingAs($this->admin)->post('/admin/push-subscriptions', ['endpoint' => self::ENDPOINT, 'keys' => $keys])->assertSessionHas('success');
+        $this->assertNull($sub->fresh()->disabled_at);
     }
 }

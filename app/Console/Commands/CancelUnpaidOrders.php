@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\Order;
 use App\Services\Paystack;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Cancels online-payment orders that were never paid, after
@@ -30,17 +31,29 @@ class CancelUnpaidOrders extends Command
             ->lazyById(100)
             ->each(function (Order $order) use ($paystack, &$cancelled) {
                 // Last check: a payment may have succeeded without us hearing (no webhook).
+                $defer = $order->payments->contains('status', 'flagged');
                 foreach ($order->payments->whereIn('status', ['pending', 'abandoned']) as $payment) {
-                    if ($paystack->ready() && $paystack->verify($payment)->status === 'success') {
-                        return;
+                    if (! in_array($paystack->verify($payment)?->status, ['abandoned', 'failed'], true)) {
+                        $defer = true;
                     }
                 }
-                $order->refresh();
-                if ($order->status === 'awaiting_payment' && $order->payment_status === 'unpaid') {
+                if ($defer) {
+                    return;
+                }
+
+                DB::transaction(function () use ($order, &$cancelled) {
+                    $latestCheckedId = $order->payments->max('id') ?? 0;
+                    $order = Order::query()->lockForUpdate()->find($order->id);
+                    if (! $order || $order->status !== 'awaiting_payment' || $order->payment_status !== 'unpaid') {
+                        return;
+                    }
+                    if ($order->payments()->where('id', '>', $latestCheckedId)->exists()) {
+                        return;
+                    }
                     // Quietly: the customer was never sent an order confirmation.
                     $order->update(['status' => 'cancelled', 'notes' => trim($order->notes."\n[Cancelled automatically: payment not completed]")]);
                     $cancelled++;
-                }
+                });
             });
 
         $this->info("{$cancelled} unpaid ".($cancelled === 1 ? 'order' : 'orders').' cancelled.');

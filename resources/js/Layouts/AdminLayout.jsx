@@ -1,15 +1,19 @@
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { InstallApp } from '@/Components/InstallApp';
+import PushPrompt from '@/Components/Admin/PushPrompt';
 import {
     BarChart3,
     CheckCircle2,
     ChevronRight,
+    CircleHelp,
     ExternalLink,
     FolderTree,
     LayoutDashboard,
     LayoutGrid,
     LayoutTemplate,
+    LifeBuoy,
     LogOut,
+    MessageSquareText,
     MonitorDown,
     Package,
     PanelsTopLeft,
@@ -32,12 +36,14 @@ const NAV = [
     { key: 'customers', label: 'Customers', href: '/admin/customers', icon: Users, shopOnly: true, hint: 'Who has ordered and how much' },
     { key: 'coupons', label: 'Coupons', href: '/admin/coupons', icon: TicketPercent, shopOnly: true, hint: 'Discount codes for your shop' },
     { key: 'products', label: 'Products', href: '/admin/products', icon: Package },
+    { key: 'reviews', label: 'Reviews', href: '/admin/reviews', icon: MessageSquareText, hint: 'Publish customer reviews' },
     { key: 'categories', label: 'Categories', href: '/admin/categories', icon: FolderTree, hint: 'Group your products' },
     { key: 'templates', label: 'Templates', href: '/admin/templates', icon: LayoutTemplate, hint: 'Choose your website design' },
     { key: 'content', label: 'Website Content', short: 'Content', href: '/admin/content', icon: PanelsTopLeft, also: ['/admin/pages'], hint: 'Homepage, banners and pages' },
     { key: 'settings', label: 'Website Settings', short: 'Settings', href: '/admin/settings', icon: Settings, also: ['/admin/shipping-zones'], hint: 'Business, branding, checkout, SEO' },
     { key: 'updates', label: 'Updates', href: '/admin/updates', icon: RefreshCw, hint: 'Install new versions of your website' },
     { key: 'profile', label: 'Profile', href: '/admin/profile', icon: UserRound, hint: 'Your name, email and password' },
+    { key: 'help', label: 'Help', href: '/admin/help', icon: LifeBuoy, hint: 'Step-by-step guides with pictures' },
 ];
 
 /** Small "New" pill for the Updates entry when a newer version is known. */
@@ -110,7 +116,7 @@ function Sidebar() {
             <nav className="flex-1 space-y-1 overflow-y-auto p-3" aria-label="Admin">
                 {items.map((item) => {
                     const on = active(url, item);
-                    const badge = item.key === 'orders' ? admin?.new_orders : 0;
+                    const badge = item.key === 'orders' ? admin?.new_orders : item.key === 'reviews' ? admin?.pending_reviews : 0;
                     return (
                         <Link
                             key={item.href}
@@ -249,6 +255,7 @@ function MoreSheet({ open, onClose }) {
                                     {item.hint && <span className="block truncate text-xs text-zinc-500">{item.hint}</span>}
                                 </span>
                                 {item.key === 'updates' && admin?.update_available && <UpdateBadge />}
+                                {item.key === 'reviews' && admin?.pending_reviews > 0 && <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">{admin.pending_reviews}</span>}
                                 <ChevronRight size={18} className="shrink-0 text-zinc-300" />
                             </Link>
                         </li>
@@ -311,6 +318,9 @@ function AppBar({ title }) {
             <span className={`min-w-0 flex-1 truncate text-center text-[15px] font-semibold text-zinc-900 transition-all duration-300 ${scrolled ? 'translate-y-0 opacity-100' : 'translate-y-1 opacity-0'}`} aria-hidden={!scrolled}>
                 {title}
             </span>
+            <Link href="/admin/help" className="-mr-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-zinc-600 transition hover:bg-zinc-100 active:scale-90" aria-label="Help">
+                <CircleHelp size={20} />
+            </Link>
             <a href="/" target="_blank" rel="noopener noreferrer" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-zinc-600 transition hover:bg-zinc-100 active:scale-90" aria-label="View website">
                 <ExternalLink size={19} />
             </a>
@@ -363,6 +373,7 @@ export default function AdminLayout({ title, children }) {
                 <PaystackTestBanner />
                 {/* Re-keyed per page (not per query string) so each page eases in. */}
                 <main key={path} className="mx-auto max-w-6xl animate-page-in px-4 pt-3 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:px-6 sm:pt-6 lg:px-8 lg:py-8 motion-reduce:animate-none">
+                    <PushPrompt />
                     {children}
                 </main>
             </div>

@@ -8,14 +8,15 @@
         <p class="mt-5 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-800">{{ $message }}</p>
     @enderror
 
-    <form method="POST" action="{{ \App\Support\Installer::detectUrl() }}/install/finish" class="mt-6 space-y-4" onsubmit="this.querySelector('button').disabled = true; this.querySelector('button').textContent = 'Installing… (up to a minute)';">
+    <script defer src="{{ asset('js/install-site.js') }}"></script>
+    <form method="POST" action="{{ \App\Support\Installer::detectUrl() }}/install/finish" class="mt-6 space-y-4" id="install-site">
         @csrf
         @include('install.field', ['name' => 'site_name', 'label' => $kind === 'store' ? 'Business name' : 'Name', 'value' => old('site_name', $siteName ?? '')])
         @include('install.field', ['name' => 'url', 'label' => 'Website address', 'value' => old('url', $url), 'help' => 'Detected automatically. Use https:// if your site has SSL.'])
         <div class="border-t border-zinc-100 pt-4"></div>
         @include('install.field', ['name' => 'name', 'label' => 'Your name', 'value' => old('name')])
         @include('install.field', ['name' => 'email', 'label' => 'Admin email', 'type' => 'email', 'value' => old('email')])
-        @include('install.field', ['name' => 'password', 'label' => 'Admin password', 'type' => 'password', 'help' => $minPassword ?? 'At least 8 characters.'])
+        @include('install.field', ['name' => 'password', 'label' => 'Admin password', 'type' => 'password', 'help' => $minPassword ?? 'At least 8 characters with letters and numbers.'])
         @include('install.field', ['name' => 'password_confirmation', 'label' => 'Repeat password', 'type' => 'password'])
         @if ($kind === 'store')
             <label class="flex items-start gap-3 rounded-xl bg-zinc-50 p-3 text-sm">

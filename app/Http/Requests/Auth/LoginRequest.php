@@ -42,6 +42,7 @@ class LoginRequest extends FormRequest
 
         if (! $user || ! $provider->validateCredentials($user, $credentials)) {
             RateLimiter::hit($this->throttleKey(), 60);
+            RateLimiter::hit($this->accountKey(), 300);
 
             throw ValidationException::withMessages([
                 'email' => 'These credentials do not match our records.',
@@ -49,6 +50,7 @@ class LoginRequest extends FormRequest
         }
 
         RateLimiter::clear($this->throttleKey());
+        RateLimiter::clear($this->accountKey());
         $provider->rehashPasswordIfRequired($user, $credentials);
 
         return $user;
@@ -56,16 +58,21 @@ class LoginRequest extends FormRequest
 
     protected function ensureIsNotRateLimited(): void
     {
-        if (! RateLimiter::tooManyAttempts($this->throttleKey(), self::MAX_ATTEMPTS)) {
+        if (! RateLimiter::tooManyAttempts($this->throttleKey(), self::MAX_ATTEMPTS) && ! RateLimiter::tooManyAttempts($this->accountKey(), 20)) {
             return;
         }
 
         event(new Lockout($this));
-        $seconds = RateLimiter::availableIn($this->throttleKey());
+        $seconds = max(RateLimiter::availableIn($this->throttleKey()), RateLimiter::availableIn($this->accountKey()));
 
         throw ValidationException::withMessages([
             'email' => "Too many login attempts. Please try again in {$seconds} seconds.",
         ]);
+    }
+
+    private function accountKey(): string
+    {
+        return 'login-account:'.hash('sha256', Str::lower(trim((string) $this->input('email'))));
     }
 
     public function throttleKey(): string

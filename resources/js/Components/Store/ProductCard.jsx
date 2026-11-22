@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useAddToCart } from '@/lib/cart';
 import Img from './Img';
 import Reveal from './Reveal';
+import { RatingLine } from './Stars';
 
 const AVAILABILITY_STYLES = {
     in_stock: 'bg-emerald-500',
@@ -148,11 +149,14 @@ function Picture({ product, eager, soldOut, className }) {
 /** Product name. Its link covers the whole card (after:inset-0); buttons sit above it with z-10. */
 function Title({ product, rounded = 'after:rounded-3xl', className = '' }) {
     return (
-        <h3 className={`line-clamp-2 text-sm leading-snug font-medium text-stone-800 sm:text-[15px] ${className}`}>
-            <Link href={product.url} prefetch="hover" className={`underline-offset-4 after:absolute after:inset-0 ${rounded} group-hover:text-stone-950 group-hover:underline focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-accent focus-visible:after:ring-offset-4`}>
-                {product.name}
-            </Link>
-        </h3>
+        <>
+            <h3 className={`line-clamp-2 text-sm leading-snug font-medium text-stone-800 sm:text-[15px] ${className}`}>
+                <Link href={product.url} prefetch="hover" className={`underline-offset-4 after:absolute after:inset-0 ${rounded} group-hover:text-stone-950 group-hover:underline focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-accent focus-visible:after:ring-offset-4`}>
+                    {product.name}
+                </Link>
+            </h3>
+            <RatingLine rating={product.rating} className="mt-1" />
+        </>
     );
 }
 

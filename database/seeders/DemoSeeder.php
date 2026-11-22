@@ -47,6 +47,7 @@ class DemoSeeder extends Seeder
             DemoSettingsSeeder::class,
             DemoCategorySeeder::class,
             DemoProductSeeder::class,
+            DemoReviewSeeder::class,
             DemoHomepageSeeder::class,
             DemoHeroSlideSeeder::class,
             DemoAdminSeeder::class,

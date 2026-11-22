@@ -135,9 +135,26 @@ class Seo
             'product:condition' => 'new',
         ];
 
+        $rating = $product->ratingSummary();
+        $topReviews = $rating ? $product->reviews()->approved()->latest('approved_at')->limit(5)->get() : collect();
+
         return $this->type('product')->schema(array_filter([
             '@type' => 'Product',
             'name' => $product->name,
+            'aggregateRating' => $rating ? [
+                '@type' => 'AggregateRating',
+                'ratingValue' => $rating['average'],
+                'reviewCount' => $rating['count'],
+                'bestRating' => 5,
+                'worstRating' => 1,
+            ] : null,
+            'review' => $topReviews->isNotEmpty() ? $topReviews->map(fn ($r) => [
+                '@type' => 'Review',
+                'author' => ['@type' => 'Person', 'name' => $r->name],
+                'datePublished' => $r->approved_at?->toDateString(),
+                'reviewBody' => $r->body,
+                'reviewRating' => ['@type' => 'Rating', 'ratingValue' => $r->rating, 'bestRating' => 5],
+            ])->values()->all() : null,
             'description' => $product->short_description ?: Markdown::excerpt($product->description, 300),
             'image' => $images ?: null,
             'url' => $product->url(),

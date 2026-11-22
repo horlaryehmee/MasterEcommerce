@@ -38,6 +38,7 @@ class OrderController extends Controller
             'payment_status' => AdminList::choice($request, 'payment_status', Order::PAYMENT_STATUSES),
             'payment_method' => AdminList::choice($request, 'payment_method', Order::PAYMENT_METHODS),
             'fulfilment' => AdminList::choice($request, 'fulfilment', Order::FULFILMENT),
+            'receipt' => $request->query('receipt') === 'pending' ? 'pending' : '',
             'customer' => preg_match('/^[pe][0-9a-f]{4,39}$/', (string) $request->query('customer')) ? (string) $request->query('customer') : '',
             'from' => AdminList::date($request, 'from'),
             'to' => AdminList::date($request, 'to'),
@@ -55,6 +56,7 @@ class OrderController extends Controller
             ->when($f['payment_status'], fn ($q, $s) => $q->where('payment_status', $s))
             ->when($f['payment_method'], fn ($q, $s) => $q->where('payment_method', $s))
             ->when($f['fulfilment'], fn ($q, $s) => $q->where('fulfilment', $s))
+            ->when($f['receipt'], fn ($q) => $q->paymentToCheck())
             ->when($f['customer'], fn ($q, $s) => $q->where('customer_key', $s));
         AdminList::whereDays($q, 'created_at', $f['from'], $f['to']);
 
@@ -67,7 +69,8 @@ class OrderController extends Controller
 
         $query = $this->query($filters)->withSum('items as item_count', 'quantity')
             // Paid with Paystack TEST keys: no real money arrived.
-            ->withExists(['payments as paid_in_test' => fn ($q) => $q->where('mode', 'test')->where('status', 'success')]);
+            ->withExists(['payments as paid_in_test' => fn ($q) => $q->where('mode', 'test')->where('status', 'success')])
+            ->withExists(['receipts as receipt_waiting' => fn ($q) => $q->where('status', 'pending')]);
         match ($filters['sort']) {
             'oldest' => $query->oldest()->oldest('id'),
             'total_desc' => $query->orderByDesc('total')->latest('id'),
@@ -91,6 +94,8 @@ class OrderController extends Controller
                 'payment_status' => $o->payment_status,
                 'payment_status_label' => Order::PAYMENT_STATUSES[$o->payment_status] ?? $o->payment_status,
                 'paid_in_test' => (bool) $o->paid_in_test,
+                // Customer says they've paid by transfer (button or receipt): check the bank.
+                'payment_to_check' => $o->payment_status === 'unpaid' && $o->status !== 'cancelled' && ($o->payment_reported_at !== null || $o->receipt_waiting),
                 'fulfilment_label' => Order::FULFILMENT[$o->fulfilment] ?? $o->fulfilment,
                 'created_at' => $o->created_at?->format('j M Y, g:i a'),
                 'created_ago' => $o->created_at?->diffForHumans(),
@@ -167,6 +172,7 @@ class OrderController extends Controller
             'statuses' => Order::STATUSES,
             'paymentStatuses' => Order::PAYMENT_STATUSES,
             'paidAt' => $order->paid_at ? AdminList::localDate($order->paid_at, 'j M Y, g:i a') : null,
+            'paymentReportedAt' => $order->payment_reported_at ? AdminList::localDate($order->payment_reported_at, 'j M Y, g:i a') : null,
             // Online payment attempts (Paystack), newest first.
             'payments' => $order->payments()->get()->map(fn (\App\Models\Payment $p) => [
                 'id' => $p->id,
@@ -179,6 +185,17 @@ class OrderController extends Controller
                 'mode' => $p->mode,
                 'message' => $p->message,
                 'at' => AdminList::localDate($p->verified_at ?? $p->created_at, 'j M Y, g:i a'),
+            ]),
+            // Bank-transfer receipts the customer uploaded, newest first.
+            'receipts' => $order->receipts()->get()->map(fn (\App\Models\PaymentReceipt $r) => [
+                'id' => $r->id,
+                'kind' => $r->kind,
+                'status' => $r->status,
+                'status_label' => \App\Models\PaymentReceipt::STATUSES[$r->status] ?? $r->status,
+                'note' => $r->note,
+                'size' => \App\Services\ImageStorage::humanBytes($r->size),
+                'url' => route('admin.receipts.file', $r),
+                'at' => AdminList::localDate($r->created_at, 'j M Y, g:i a'),
             ]),
             // wa.me needs the international format; local numbers (0801…) get a call link only.
             'customerWhatsapp' => $order->customerWhatsappLink("Hello {$order->customer_name}, this is about your order #{$order->number}."),
@@ -194,6 +211,9 @@ class OrderController extends Controller
 
         if (($data['payment_status'] ?? null) === 'paid' && $order->status === 'awaiting_payment' && ! isset($data['status'])) {
             $data['status'] = 'pending';
+        }
+        if (($data['payment_status'] ?? null) === 'paid' && ! $order->paid_at) {
+            $data['paid_at'] = now();
         }
         $order->update($data);
         $emailed = $mailer->updated($order);

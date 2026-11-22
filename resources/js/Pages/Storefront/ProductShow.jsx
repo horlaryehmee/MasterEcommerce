@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { WhatsAppIcon } from '@/Components/Icons';
 import Breadcrumbs from '@/Components/Store/Breadcrumbs';
 import { AvailabilityLabel, PriceTag, ProductGrid } from '@/Components/Store/ProductCard';
+import ProductReviews from '@/Components/Store/ProductReviews';
+import { Stars } from '@/Components/Store/Stars';
 import ProductGallery from '@/Components/Store/ProductGallery';
 import QuantityStepper from '@/Components/Store/QuantityStepper';
 import ShareButtons from '@/Components/Store/ShareButtons';
@@ -35,7 +37,7 @@ function withSelection(url, product, selection) {
     }
 }
 
-export default function ProductShow({ product, whatsappUrl, related, isPreview }) {
+export default function ProductShow({ product, whatsappUrl, related, isPreview, reviews }) {
     const { store } = usePage().props;
     const selection = useVariantSelection(product);
     const { variant, missing, hasVariants } = selection;
@@ -120,6 +122,14 @@ export default function ProductShow({ product, whatsappUrl, related, isPreview }
                             </Link>
                         )}
                         <h1 className="mt-2 text-2xl leading-tight font-bold tracking-tight text-balance text-stone-950 sm:text-3xl lg:text-4xl">{product.name}</h1>
+                        {reviews?.count > 0 && (
+                            <a href="#reviews" className="mt-2 inline-flex items-center gap-2 text-sm text-stone-600 hover:text-stone-900">
+                                <Stars value={reviews.average} size={16} />
+                                <span className="underline-offset-2 hover:underline">
+                                    {reviews.average.toFixed(1)} · {reviews.count} {reviews.count === 1 ? 'review' : 'reviews'}
+                                </span>
+                            </a>
+                        )}
 
                         <div className="mt-5 flex flex-wrap items-center gap-3" aria-live="polite">
                             <PriceTag price={shown.price} compareAt={shown.compareAt} from={priceFrom} size="lg" />
@@ -215,6 +225,8 @@ export default function ProductShow({ product, whatsappUrl, related, isPreview }
                         />
                     </section>
                 )}
+
+                {reviews && <ProductReviews key={product.id} reviews={reviews} slug={product.slug} />}
 
                 {related.length > 0 && (
                     <section className="mt-16 border-t border-stone-100 pt-12 sm:mt-20">

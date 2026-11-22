@@ -2,6 +2,7 @@ import { Link, usePage } from '@inertiajs/react';
 import { ArrowRight, CheckCircle2, ShoppingCart, Trash2, Truck, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { announceCartState, onOpenCart, updateCartItem } from '@/lib/cart';
+import CouponBox from './CouponBox';
 import Img from './Img';
 import QuantityStepper from './QuantityStepper';
 
@@ -151,10 +152,28 @@ export default function CartDrawer() {
                         </ul>
 
                         <footer className="shrink-0 space-y-3 border-t border-stone-100 bg-white px-5 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
-                            <div className="flex items-baseline justify-between">
-                                <span className="text-sm text-stone-600">Subtotal</span>
-                                <span className="text-xl font-bold tracking-tight text-stone-950">{cart.subtotal}</span>
-                            </div>
+                            {(cart.coupons_enabled || cart.coupon) && <CouponBox coupon={cart.coupon} compact />}
+                            {cart.coupon?.discount > 0 ? (
+                                <dl className="space-y-1 text-sm">
+                                    <div className="flex items-baseline justify-between text-stone-600">
+                                        <dt>Subtotal</dt>
+                                        <dd>{cart.subtotal}</dd>
+                                    </div>
+                                    <div className="flex items-baseline justify-between text-emerald-700">
+                                        <dt>Discount ({cart.coupon.code})</dt>
+                                        <dd>−{cart.coupon.discount_label}</dd>
+                                    </div>
+                                    <div className="flex items-baseline justify-between pt-1">
+                                        <dt className="font-medium text-stone-900">Total</dt>
+                                        <dd className="text-xl font-bold tracking-tight text-stone-950">{cart.total}</dd>
+                                    </div>
+                                </dl>
+                            ) : (
+                                <div className="flex items-baseline justify-between">
+                                    <span className="text-sm text-stone-600">Subtotal</span>
+                                    <span className="text-xl font-bold tracking-tight text-stone-950">{cart.subtotal}</span>
+                                </div>
+                            )}
                             <p className="-mt-2 text-xs text-stone-500">Delivery is calculated at checkout.</p>
                             <Link href="/checkout" className="btn-primary h-12 w-full text-base">
                                 Checkout <ArrowRight size={17} />

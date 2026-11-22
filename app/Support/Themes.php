@@ -40,7 +40,7 @@ class Themes
                 'why' => 'cards',
                 // Homepage product sections on phones: a 2-column grid, or a swipeable row.
                 'products' => 'grid',
-                'home' => ['hero', 'marquee', 'categories', 'featured', 'promo', 'new_arrivals', 'why', 'about'],
+                'home' => ['hero', 'marquee', 'categories', 'featured', 'promo', 'new_arrivals', 'why', 'reviews', 'about'],
             ],
             'style' => [
                 'primary_color' => '#111827', 'secondary_color' => '#F4F1EC', 'accent_color' => '#C2410C',
@@ -60,7 +60,7 @@ class Themes
                 'why' => 'strip',
                 // Homepage product sections on phones: a 2-column grid, or a swipeable row.
                 'products' => 'rail',
-                'home' => ['hero', 'marquee', 'categories', 'new_arrivals', 'promo', 'featured', 'about', 'why'],
+                'home' => ['hero', 'marquee', 'categories', 'new_arrivals', 'promo', 'featured', 'reviews', 'about', 'why'],
             ],
             'style' => [
                 'primary_color' => '#111111', 'secondary_color' => '#F3EFE8', 'accent_color' => '#A0784A',
@@ -80,7 +80,7 @@ class Themes
                 'why' => 'cards',
                 // Homepage product sections on phones: a 2-column grid, or a swipeable row.
                 'products' => 'rail',
-                'home' => ['hero', 'marquee', 'categories', 'featured', 'why', 'promo', 'new_arrivals', 'about'],
+                'home' => ['hero', 'marquee', 'categories', 'featured', 'why', 'promo', 'new_arrivals', 'reviews', 'about'],
             ],
             'style' => [
                 'primary_color' => '#7A2E4D', 'secondary_color' => '#FBEFF2', 'accent_color' => '#C9806B',
@@ -100,7 +100,7 @@ class Themes
                 'why' => 'strip',
                 // Homepage product sections on phones: a 2-column grid, or a swipeable row.
                 'products' => 'rail',
-                'home' => ['hero', 'why', 'categories', 'featured', 'new_arrivals', 'promo', 'marquee', 'about'],
+                'home' => ['hero', 'why', 'categories', 'featured', 'new_arrivals', 'promo', 'marquee', 'reviews', 'about'],
             ],
             'style' => [
                 'primary_color' => '#0F172A', 'secondary_color' => '#EEF2FF', 'accent_color' => '#2563EB',
@@ -120,7 +120,7 @@ class Themes
                 'why' => 'cards',
                 // Homepage product sections on phones: a 2-column grid, or a swipeable row.
                 'products' => 'rail',
-                'home' => ['hero', 'marquee', 'categories', 'featured', 'promo', 'new_arrivals', 'why', 'about'],
+                'home' => ['hero', 'marquee', 'categories', 'featured', 'promo', 'new_arrivals', 'why', 'reviews', 'about'],
             ],
             'style' => [
                 'primary_color' => '#D6338A', 'secondary_color' => '#FFF4F8', 'accent_color' => '#D6338A',

@@ -56,7 +56,7 @@ class WebPush
      */
     public function notify(array $payload, ?array $userIds = null): int
     {
-        $subs = PushSubscription::query()->when($userIds, fn ($q) => $q->whereIn('user_id', $userIds))->get();
+        $subs = PushSubscription::query()->active()->when($userIds, fn ($q) => $q->whereIn('user_id', $userIds))->get();
 
         return $this->send($subs->all(), $payload);
     }

@@ -26,9 +26,42 @@ class HomeController extends StorefrontController
             'promo' => $this->promo($home),
             'about' => $this->about($home),
             'why' => $this->why($home),
+            'reviews' => $this->reviews(),
             // Section order comes from the template (Admin → Templates).
             'order' => \App\Support\Themes::layout()['home'],
         ], Seo::make()->home());
+    }
+
+    /**
+     * "What our customers say": approved 4–5 star reviews, once there are at
+     * least Review::HOME_MINIMUM of them. Can be switched off in Admin → Reviews.
+     */
+    protected function reviews(): ?array
+    {
+        $s = \App\Models\BusinessSetting::current();
+        if (! $s->reviews_enabled || ! $s->reviews_home_enabled) {
+            return null;
+        }
+
+        return \App\Support\StorefrontCache::remember('home.reviews', function () {
+            $base = \App\Models\Review::query()->approved()->where('rating', '>=', 4)
+                ->whereHas('product', fn ($q) => $q->visible());
+            $count = (clone $base)->count();
+            if ($count < \App\Models\Review::HOME_MINIMUM) {
+                return null;
+            }
+            $avg = \App\Models\Review::query()->approved()->avg('rating');
+
+            return [
+                'average' => round((float) $avg, 1),
+                'total' => \App\Models\Review::query()->approved()->count(),
+                'items' => $base->with(['product:id,name,slug', 'product.primaryImage'])
+                    ->latest('approved_at')->limit(12)->get()
+                    ->map(fn ($r) => $r->toPublic() + [
+                        'product' => ['name' => $r->product->name, 'url' => $r->product->url(), 'image' => Media::url($r->product->primaryImage?->path, 'sm')],
+                    ])->values(),
+            ];
+        });
     }
 
     /**

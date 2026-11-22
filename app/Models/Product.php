@@ -82,6 +82,8 @@ class Product extends Model
             'price' => 'decimal:2',
             'compare_at_price' => 'decimal:2',
             'price_max' => 'decimal:2',
+            'reviews_count' => 'integer',
+            'rating_avg' => 'decimal:2',
             'options' => 'array',
             'has_variants' => 'boolean',
             'is_featured' => 'boolean',
@@ -116,6 +118,31 @@ class Product extends Model
     public function images(): HasMany
     {
         return $this->hasMany(ProductImage::class)->orderByDesc('is_primary')->orderBy('sort_order')->orderBy('id');
+    }
+
+    public function reviews(): HasMany
+    {
+        return $this->hasMany(Review::class);
+    }
+
+    /** Recalculates the approved-review count and average (saved quietly: no cache churn). */
+    public function syncRating(): void
+    {
+        $row = $this->reviews()->approved()->toBase()->selectRaw('COUNT(*) as n, AVG(rating) as avg')->first();
+        $this->forceFill([
+            'reviews_count' => (int) $row->n,
+            'rating_avg' => $row->n ? round((float) $row->avg, 2) : null,
+        ])->saveQuietly();
+    }
+
+    /** Star rating for cards and the product page; null when reviews are off or there are none. */
+    public function ratingSummary(): ?array
+    {
+        if (! BusinessSetting::current()->reviews_enabled || ! $this->reviews_count) {
+            return null;
+        }
+
+        return ['average' => round((float) $this->rating_avg, 1), 'count' => (int) $this->reviews_count];
     }
 
     public function variants(): HasMany
@@ -265,6 +292,7 @@ class Product extends Model
             'purchasable' => in_array($this->availability, self::PURCHASABLE, true),
             'category' => $this->relationLoaded('category') && $this->category ? $this->category->name : null,
             'image' => Media::image($this->primaryImage?->path, $this->primaryImage?->alt ?: $this->name),
+            'rating' => $this->ratingSummary(),
         ];
     }
 

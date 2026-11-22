@@ -25,6 +25,7 @@ class MailSettingsTest extends TestCase
     public function test_smtp_settings_are_saved_with_the_password_encrypted_and_never_sent_to_the_browser(): void
     {
         $this->actingAsAdmin();
+        $this->withSession(['auth.password_confirmed_at' => now()->timestamp]);
 
         $this->put('/admin/settings/email', $this->smtp())->assertRedirect('/admin/settings?tab=email')->assertSessionHasNoErrors();
 
@@ -45,6 +46,7 @@ class MailSettingsTest extends TestCase
     public function test_blank_password_keeps_the_saved_one_and_it_can_be_removed(): void
     {
         $this->actingAsAdmin();
+        $this->withSession(['auth.password_confirmed_at' => now()->timestamp]);
         $this->put('/admin/settings/email', $this->smtp());
 
         $this->put('/admin/settings/email', $this->smtp(['mail_password' => '', 'mail_port' => 587, 'mail_encryption' => 'tls']));
@@ -59,6 +61,7 @@ class MailSettingsTest extends TestCase
     public function test_smtp_needs_a_valid_server_name_and_port(): void
     {
         $this->actingAsAdmin();
+        $this->withSession(['auth.password_confirmed_at' => now()->timestamp]);
 
         $this->put('/admin/settings/email', $this->smtp(['mail_host' => '', 'mail_port' => '']))->assertSessionHasErrors(['mail_host', 'mail_port']);
         $this->put('/admin/settings/email', $this->smtp(['mail_host' => 'https://mail.shop.test/']))->assertSessionHasErrors('mail_host');
@@ -133,6 +136,7 @@ class MailSettingsTest extends TestCase
     public function test_failed_test_email_explains_the_error(): void
     {
         $this->actingAsAdmin();
+        $this->withSession(['auth.password_confirmed_at' => now()->timestamp]);
         // Nothing listens on port 1, so the connection is refused at once.
         $this->put('/admin/settings/email', $this->smtp(['mail_host' => '127.0.0.1', 'mail_port' => 1, 'mail_encryption' => 'tls']));
 

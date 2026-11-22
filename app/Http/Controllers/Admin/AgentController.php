@@ -25,7 +25,7 @@ class AgentController extends Controller
         try {
             $connection = $this->agent->connect($data['server_url'], $data['code']);
         } catch (AgentException $e) {
-            return back()->withErrors(['code' => $e->getMessage()])->withInput();
+            return back()->withErrors(['code' => $e->getMessage()])->withInput($request->only('server_url'));
         }
 
         return back()->with('success', 'Connected to the update server. Key fingerprint: '.$connection->signing_fingerprint);

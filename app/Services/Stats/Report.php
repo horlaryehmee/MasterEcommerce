@@ -160,6 +160,9 @@ class Report
     /** Top values of a session column with visits and unique visitors. */
     public function bySession(string $column, int $limit = 10): array
     {
+        if (! in_array($column, ['entry_path', 'country_code', 'channel', 'referrer_host', 'campaign', 'device', 'browser', 'os'], true)) {
+            throw new \InvalidArgumentException('Unsupported reporting column.');
+        }
         $total = max(1, $this->sessions()->count());
 
         return $this->sessions()->whereNotNull($column)

@@ -8,7 +8,9 @@ use App\Models\HomepageSetting;
 use App\Models\Page;
 use App\Models\Product;
 use App\Models\ProductImage;
+use App\Models\Review;
 use App\Models\User;
+use Database\Seeders\DemoReviewSeeder;
 use Database\Seeders\DemoSeeder;
 use Database\Seeders\EssentialSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -43,11 +45,17 @@ class DemoSeederTest extends TestCase
         Storage::disk('public')->assertExists(BusinessSetting::current()->logo_path);
         $this->assertNotNull(HomepageSetting::current()->hero_image_path);
 
-        $counts = [Product::count(), ProductImage::count(), Category::count(), User::count()];
-        $this->seed(DemoSeeder::class);
-        $this->assertSame($counts, [Product::count(), ProductImage::count(), Category::count(), User::count()]);
+        // Reviews: every review's product exists, ratings are cached, and the homepage section shows.
+        $expected = count(array_merge(...array_values(DemoReviewSeeder::reviews())));
+        $this->assertSame($expected, Review::approved()->count());
+        $this->assertSame(count(DemoReviewSeeder::waiting()), Review::where('status', 'pending')->count());
+        $this->assertSame($expected, (int) Product::sum('reviews_count'));
 
-        $this->get('/')->assertOk();
+        $counts = [Product::count(), ProductImage::count(), Category::count(), User::count(), Review::count()];
+        $this->seed(DemoSeeder::class);
+        $this->assertSame($counts, [Product::count(), ProductImage::count(), Category::count(), User::count(), Review::count()]);
+
+        $this->get('/')->assertOk()->assertInertia(fn ($p) => $p->has('reviews.items'));
     }
 
     public function test_demo_seeder_refuses_to_touch_a_client_site(): void

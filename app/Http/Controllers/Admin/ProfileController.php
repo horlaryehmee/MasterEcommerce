@@ -8,6 +8,8 @@ use App\Models\User;
 use App\Support\Totp;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
@@ -22,6 +24,7 @@ class ProfileController extends Controller
         $pending = filled($user->two_factor_secret) && ! $user->hasTwoFactor();
 
         return Inertia::render('Admin/Profile', [
+            'pendingEmail' => $request->session()->get('profile.email_change.email'),
             'profile' => $user->only('name', 'email'),
             'twoFactor' => [
                 'enabled' => $user->hasTwoFactor(),
@@ -37,7 +40,7 @@ class ProfileController extends Controller
             'recoveryCodes' => $request->session()->get('two_factor_recovery_codes'),
             'push' => [
                 'publicKey' => app(\App\Services\WebPush::class)->publicKey(),
-                'devices' => $user->pushSubscriptions()->latest()->get()->map(fn ($d) => [
+                'devices' => $user->pushSubscriptions()->active()->latest()->get()->map(fn ($d) => [
                     'id' => $d->id,
                     'device' => $d->device,
                     'endpoint_hash' => $d->endpoint_hash,
@@ -57,9 +60,49 @@ class ProfileController extends Controller
             'email' => ['required', 'email', 'max:160', Rule::unique('users')->ignore($user->id)],
         ]);
 
-        $user->update($data);
+        if ($data['email'] !== $user->email) {
+            $this->confirmPassword($request);
+            $code = (string) random_int(10000000, 99999999);
+            try {
+                Mail::raw("Your email change verification code is {$code}. It expires in 10 minutes.", fn ($mail) => $mail->to($data['email'])->subject('Verify your administrator email'));
+            } catch (\Throwable $e) {
+                report($e);
+                throw \Illuminate\Validation\ValidationException::withMessages(['email' => 'We couldn’t send the verification code to that address. Check that your website can send emails (Website Settings → Email → Send a test email), then try again.']);
+            }
+            $request->session()->put('profile.email_change', [
+                'user_id' => $user->id, 'previous' => $user->email, 'email' => $data['email'],
+                'hash' => Hash::make($code), 'expires' => now()->addMinutes(10)->timestamp,
+            ]);
+            $user->update(['name' => $data['name']]);
+
+            return back()->with('success', 'Check your new address for the verification code.');
+        }
+        $user->update(['name' => $data['name']]);
 
         return back()->with('success', 'Profile updated.');
+    }
+
+    public function verifyEmail(Request $request): RedirectResponse
+    {
+        $data = $request->validate(['code' => ['required', 'digits:8']]);
+        $change = $request->session()->get('profile.email_change');
+        $user = $request->user();
+        if (! $change || $change['user_id'] !== $user->id || $change['previous'] !== $user->email
+            || $change['expires'] < now()->timestamp || ! Hash::check($data['code'], $change['hash'])) {
+            throw ValidationException::withMessages(['code' => 'Invalid or expired verification code.']);
+        }
+        $previous = $user->email;
+        $user->forceFill(['email' => $change['email'], 'email_verified_at' => now()])->save();
+        $request->session()->forget('profile.email_change');
+
+        // Tell the old address (if this wasn't you, you'll know). A mail failure doesn't undo the verified change.
+        try {
+            Mail::raw("The administrator login email for your website was changed from {$previous} to {$change['email']}. If you didn't do this, contact the person who manages your website or hosting straight away.", fn ($mail) => $mail->to($previous)->subject('Your administrator email was changed'));
+        } catch (\Throwable $e) {
+            report($e);
+        }
+
+        return back()->with('success', 'Your administrator email has been updated.');
     }
 
     /** Step 1: a new secret for the authenticator app (not active until confirmed). */

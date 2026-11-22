@@ -7,13 +7,14 @@ import Hero from '@/Components/Store/Home/Hero';
 import Marquee from '@/Components/Store/Home/Marquee';
 import ProductSection from '@/Components/Store/Home/ProductSection';
 import PromoBanner from '@/Components/Store/Home/PromoBanner';
+import ReviewsSection from '@/Components/Store/Home/ReviewsSection';
 import WhyChooseUs from '@/Components/Store/Home/WhyChooseUs';
 import StoreLayout from '@/Layouts/StoreLayout';
 
-const DEFAULT_ORDER = ['hero', 'marquee', 'categories', 'featured', 'promo', 'new_arrivals', 'why', 'about'];
+const DEFAULT_ORDER = ['hero', 'marquee', 'categories', 'featured', 'promo', 'new_arrivals', 'why', 'reviews', 'about'];
 
 /** Homepage sections, in the order the template (Admin → Templates) lays them out. */
-export default function Home({ hero, marquee, categories, featured, newArrivals, promo, about, why, order }) {
+export default function Home({ hero, marquee, categories, featured, newArrivals, promo, about, why, reviews, order }) {
     const isEmpty = !hero && !marquee && !categories && !featured && !newArrivals && !promo && !about && !why;
     const sections = {
         hero: <Hero hero={hero} />,
@@ -24,6 +25,7 @@ export default function Home({ hero, marquee, categories, featured, newArrivals,
         new_arrivals: <ProductSection section={newArrivals} link="/products?sort=latest" />,
         why: <WhyChooseUs why={why} />,
         about: <AboutSection about={about} />,
+        reviews: <ReviewsSection reviews={reviews} />,
     };
 
     return (

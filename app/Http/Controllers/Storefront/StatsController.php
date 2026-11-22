@@ -17,13 +17,15 @@ class StatsController extends Controller
     public function collect(Request $request, Collector $collector): Response
     {
         $empty = response()->noContent();
+        if (strlen($request->getContent()) > 16384) {
+            return $empty;
+        }
 
         if (! Collector::shouldTrack($request) || UserAgent::parse($request->userAgent())['bot']) {
             return $empty;
         }
 
-        // sendBeacon posts text/plain; accept both.
-        $data = $request->json()->all() ?: (json_decode((string) $request->getContent(), true) ?: []);
+        $data = $request->json()->all();
 
         $uuid = ['required', 'string', 'regex:/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i'];
         $validator = Validator::make($data, [
@@ -35,7 +37,7 @@ class StatsController extends Controller
             'title' => ['nullable', 'string', 'max:300'],
             'ref' => ['nullable', 'string', 'max:1000'],
             'w' => ['nullable', 'integer', 'min:0', 'max:20000'],
-            'utm' => ['nullable', 'array'],
+            'utm' => ['nullable', 'array:source,medium,campaign'],
             'utm.*' => ['nullable', 'string', 'max:200'],
             'engaged' => ['required_if:t,engage', 'nullable', 'integer', 'min:0'],
             'name' => ['required_if:t,event', 'nullable', 'in:'.implode(',', self::EVENTS)],
@@ -46,6 +48,13 @@ class StatsController extends Controller
             return $empty;
         }
         $data = $validator->validated();
+
+        // A beacon may come from an older client. Scrub every validated string before persistence.
+        array_walk_recursive($data, function (&$value) {
+            if (is_string($value) && \App\Support\Tracking::containsPrivateUrl($value)) {
+                $value = '/private';
+            }
+        });
 
         // Never count the admin or the beacon itself.
         if (isset($data['path']) && preg_match('#^/(admin|hello)(/|$)#', $data['path'])) {

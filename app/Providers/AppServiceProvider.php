@@ -29,6 +29,13 @@ class AppServiceProvider extends ServiceProvider
         // Catch N+1 queries during development.
         Model::preventLazyLoading(! $this->app->isProduction());
 
+        // New settings columns must not be hidden by a settings cache saved before the migration.
+        Event::listen(\Illuminate\Database\Events\MigrationsEnded::class, function () {
+            \Illuminate\Support\Facades\Cache::forget('settings.business');
+            \App\Models\BusinessSetting::forgetResolved();
+            \App\Support\StorefrontCache::flush();
+        });
+
         // GET /up (for uptime monitors): fails with 500 unless the database answers
         // and storage is writable, i.e. the shop can actually take orders.
         Event::listen(DiagnosingHealth::class, function () {
@@ -43,9 +50,7 @@ class AppServiceProvider extends ServiceProvider
             URL::forceScheme('https');
         }
 
-        Password::defaults(fn () => $this->app->isProduction()
-            ? Password::min(8)->letters()->numbers()
-            : Password::min(8));
+        Password::defaults(fn () => Password::min(8)->letters()->numbers());
 
         // Email settings from Admin → Settings → Email, applied the first time mail is used.
         \App\Support\MailSettings::flush();

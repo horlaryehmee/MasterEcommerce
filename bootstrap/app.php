@@ -28,10 +28,8 @@ return Application::configure(basePath: dirname(__DIR__))
         // Appended so it runs after TrustProxies: behind a proxy, https must be recognised first.
         $middleware->append(\App\Http\Middleware\RedirectToHttps::class);
 
-        // cPanel hosts often handle HTTPS in a proxy in front of PHP (LiteSpeed, Cloudflare).
-        // Trust only its "this visit was HTTPS" headers, not client IP/host headers, so IP-based
-        // limits such as login throttling can't be bypassed with a forged X-Forwarded-For.
-        $middleware->trustProxies(at: '*', headers: Request::HEADER_X_FORWARDED_PROTO | Request::HEADER_X_FORWARDED_PORT);
+        // Which proxies/headers to believe: see App\Http\Middleware\TrustProxies (TRUSTED_PROXIES in .env).
+        $middleware->replace(\Illuminate\Http\Middleware\TrustProxies::class, \App\Http\Middleware\TrustProxies::class);
 
         // Global (runs before routing), so redirects also work for URLs that no longer exist.
         $middleware->append(\App\Http\Middleware\HandleRedirects::class);
@@ -53,9 +51,9 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias(['shop' =>\App\Http\Middleware\EnsureShopEnabled::class]);
 
-        // The stats beacon uses sendBeacon (no CSRF token) and sets a plain, unencrypted visitor cookie.
+        // The CSRF-protected stats beacon uses a JavaScript-readable visitor cookie.
         // Paystack's webhook is authenticated by its HMAC signature (PaystackController::webhook).
-        $middleware->validateCsrfTokens(except: ['hello', 'payments/paystack/webhook']);
+        $middleware->validateCsrfTokens(except: ['payments/paystack/webhook']);
         $middleware->encryptCookies(except: ['nx_vid']);
 
         // A space is a valid thousands separator, so don't trim these fields.
@@ -66,7 +64,7 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // Never put secrets back into the session when a form has errors.
-        $exceptions->dontFlash(['current_password', 'password', 'password_confirmation', 'mail_password', 'paystack_secret_key']);
+        $exceptions->dontFlash(['current_password', 'password', 'password_confirmation', 'mail_password', 'paystack_secret_key', 'paystack_test_secret_key', 'paystack_live_secret_key', 'token', 'setup_token', 'code']);
 
         // Friendly, branded error pages (the debug page is still shown locally for 500s).
         $exceptions->respond(function (Response $response, Throwable $e, Request $request) {

@@ -1,4 +1,4 @@
-import { Link, router } from '@inertiajs/react';
+import { Link, router, usePage } from '@inertiajs/react';
 import { CircleDollarSign, ListChecks, ShoppingBag, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { BulkBar, BulkDialog, SelectAll, SelectRow, plural, useBulkAction, useSelection } from '@/Components/Admin/Bulk';
@@ -6,6 +6,14 @@ import { FilterDates, FilterSelect, ListToolbar, activeFilters, useList } from '
 import { OrderStatusBadge, PaymentStatusBadge } from '@/Components/Admin/OrderBadges';
 import { AdminEmpty, AdminPagination, Button, FilterChips, PageHeader } from '@/Components/Admin/ui';
 import AdminLayout from '@/Layouts/AdminLayout';
+
+function ReceiptBadge() {
+    return (
+        <span className="rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-sky-900 uppercase" title="The customer says they’ve paid by bank transfer: check your bank">
+            Check payment
+        </span>
+    );
+}
 
 function TestBadge() {
     return (
@@ -17,12 +25,14 @@ function TestBadge() {
 
 export default function OrdersIndex({ orders, filters, statuses, paymentStatuses, paymentMethods, fulfilments, sorts, counts, customerName }) {
     const list = useList('/admin/orders', filters, { sort: 'newest', per_page: 25 });
+    const receiptsWaiting = usePage().props.admin?.payments_to_check ?? 0;
     const apply = list.apply;
     const active = activeFilters(filters, {
         customer: () => `Customer: ${customerName || 'unknown'}`,
         payment_status: paymentStatuses,
         payment_method: paymentMethods,
         fulfilment: fulfilments,
+        receipt: () => 'Payment to check',
         from: (v) => `From ${v}`,
         to: (v) => `Until ${v}`,
     });
@@ -51,6 +61,14 @@ export default function OrdersIndex({ orders, filters, statuses, paymentStatuses
     return (
         <AdminLayout title="Orders">
             <PageHeader title="Orders" description="Orders placed through your website's checkout." />
+            {receiptsWaiting > 0 && !filters.receipt && (
+                <button type="button" onClick={() => apply({ receipt: 'pending' })} className="mb-4 flex w-full items-center justify-between gap-3 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-left text-sm text-sky-950 hover:bg-sky-100">
+                    <span>
+                        <strong>{plural(receiptsWaiting, 'bank transfer')} to check.</strong> Customers say they’ve paid. Check your bank, then confirm.
+                    </span>
+                    <span className="shrink-0 font-semibold underline">View</span>
+                </button>
+            )}
 
             <div className="rounded-2xl border border-zinc-200 bg-white shadow-xs">
                 <div className="border-b border-zinc-100 px-4 pt-4 pb-3">
@@ -60,6 +78,7 @@ export default function OrdersIndex({ orders, filters, statuses, paymentStatuses
                     <FilterSelect list={list} name="payment_status" label="Payment" options={paymentStatuses} />
                     <FilterSelect list={list} name="payment_method" label="Payment method" options={paymentMethods} />
                     <FilterSelect list={list} name="fulfilment" label="Delivery or pickup" options={fulfilments} />
+                    <FilterSelect list={list} name="receipt" label="Bank transfers" options={{ pending: 'Payment to check' }} placeholder="Any" />
                     <FilterDates list={list} label="Placed between" />
                 </ListToolbar>
 
@@ -120,6 +139,7 @@ export default function OrdersIndex({ orders, filters, statuses, paymentStatuses
                                             <span className="mt-1 flex items-center gap-1">
                                                 <PaymentStatusBadge status={o.payment_status} label={o.payment_status_label} />
                                                 {o.paid_in_test && <TestBadge />}
+                                                {o.payment_to_check && <ReceiptBadge />}
                                             </span>
                                         </td>
                                         <td className="px-4 py-3">
@@ -157,6 +177,7 @@ export default function OrdersIndex({ orders, filters, statuses, paymentStatuses
                                                 <OrderStatusBadge status={o.status} label={o.status_label} />
                                                 <PaymentStatusBadge status={o.payment_status} label={o.payment_status_label} />
                                                 {o.paid_in_test && <TestBadge />}
+                                                {o.payment_to_check && <ReceiptBadge />}
                                             </span>
                                         </span>
                                     </Link>

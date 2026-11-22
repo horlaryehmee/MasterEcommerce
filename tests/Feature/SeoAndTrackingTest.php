@@ -184,6 +184,7 @@ class SeoAndTrackingTest extends TestCase
         $this->put('/admin/settings/tracking', ['ga4_id' => 'UA-123', 'gtm_id' => 'GTM-', 'meta_pixel_id' => 'abc', 'google_ads_id' => 'AW-x'])
             ->assertSessionHasErrors(['ga4_id', 'gtm_id', 'meta_pixel_id', 'google_ads_id']);
 
+        $this->withSession(['auth.password_confirmed_at' => now()->timestamp]);
         $this->put('/admin/settings/code', ['head_code' => '<script>1</script>', 'footer_code' => ''])->assertSessionHasNoErrors();
         $this->assertSame('<script>1</script>', BusinessSetting::query()->first()->head_code);
 

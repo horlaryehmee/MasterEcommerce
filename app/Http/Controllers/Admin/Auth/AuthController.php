@@ -38,6 +38,8 @@ class AuthController extends Controller
         $user = $request->authenticate();
         $request->session()->regenerate();
 
+        $request->session()->passwordConfirmed();
+
         if ($user->hasTwoFactor()) {
             // Not signed in yet: remember who passed the password step, briefly.
             $request->session()->put('login.two_factor', [
@@ -112,6 +114,17 @@ class AuthController extends Controller
         return $user?->hasTwoFactor() ? $user : null;
     }
 
+    public function confirmPassword(Request $request): \Symfony\Component\HttpFoundation\Response
+    {
+        $request->validate(['current_password' => ['required', 'current_password']]);
+        $request->session()->passwordConfirmed();
+
+        $destination = $request->session()->pull('url.intended', route('admin.dashboard'));
+        $request->session()->flash('success', 'Password confirmed. You can continue.');
+
+        return $request->header('X-Inertia') ? Inertia::location($destination) : redirect()->to($destination);
+    }
+
     public function logout(Request $request): RedirectResponse
     {
         Auth::guard('web')->logout();
@@ -132,11 +145,7 @@ class AuthController extends Controller
     {
         $request->validate(['email' => ['required', 'email', 'max:160']]);
 
-        $status = Password::sendResetLink($request->only('email'));
-
-        if ($status === Password::RESET_THROTTLED) {
-            throw ValidationException::withMessages(['email' => __($status)]);
-        }
+        Password::sendResetLink($request->only('email'));
 
         // Same response whether or not the email exists, so accounts cannot be discovered.
         return back()->with('status', 'If that email address belongs to the administrator, a password reset link has been sent.');
