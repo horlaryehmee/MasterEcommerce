@@ -358,4 +358,22 @@ class ShopTest extends TestCase
         $this->assertSame('#AA0000', $s->primary_color);
         $this->get('/products')->assertInertia(fn (Assert $page) => $page->where('store.card_style', 'boxed'));
     }
+
+    public function test_product_card_shape_and_corners_can_be_chosen(): void
+    {
+        $this->get('/')->assertInertia(fn (Assert $page) => $page->where('store.card_shape', 'auto')->where('store.card_corners', 'auto'));
+
+        $this->actingAsAdmin();
+        $colours = ['primary_color' => '#111827', 'secondary_color' => '#F4F1EC', 'accent_color' => '#C2410C'];
+        $this->put('/admin/settings/branding', $colours + ['product_card_shape' => 'oval'])->assertSessionHasErrors('product_card_shape');
+        $this->put('/admin/settings/branding', $colours + ['product_card_corners' => 'wavy'])->assertSessionHasErrors('product_card_corners');
+        $this->put('/admin/settings/branding', $colours + ['product_card_shape' => 'portrait', 'product_card_corners' => 'sharp'])->assertSessionHasNoErrors();
+
+        BusinessSetting::forgetResolved();
+        $this->get('/products')->assertInertia(fn (Assert $page) => $page->where('store.card_shape', 'portrait')->where('store.card_corners', 'sharp'));
+        $this->get('/admin/settings?tab=branding')->assertInertia(fn (Assert $page) => $page
+            ->where('settings.product_card_shape', 'portrait')
+            ->where('cardShapes.square', 'Square')
+            ->where('cardCorners.rounded', 'Rounded'));
+    }
 }

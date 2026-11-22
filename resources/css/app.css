@@ -211,3 +211,33 @@ body:has(.store-shell) :is(h1, h2, h3, .font-heading) {
     border-radius: 2px;
 }
 
+
+/*
+ * Product card options (Branding → Product cards → Image shape / Corners), on top of the card design.
+ * Set on each card's <article> only when the owner picks something other than "As designed".
+ * !important so an explicit choice also beats template-wide styling (e.g. Atelier's square corners).
+ * .card-media = the image box, .card-box = a card with its own background/border, .card-link = the
+ * title link that covers the card (its focus ring follows the corners).
+ */
+[data-card-shape='square'] .card-media {
+    aspect-ratio: 1 / 1 !important;
+}
+[data-card-shape='portrait'] .card-media {
+    aspect-ratio: 3 / 4 !important;
+}
+[data-card-corners='sharp'] .card-media,
+[data-card-corners='sharp'].card-box,
+[data-card-corners='sharp'] .card-link::after {
+    border-radius: 0 !important;
+}
+/* Rounded: designs that are already rounded keep their own curve; square-cornered ones get one. */
+[data-card-corners='rounded'] .card-media.card-sharp,
+[data-card-corners='rounded'] .card-link.card-sharp::after {
+    border-radius: 1rem !important;
+}
+.store-shell[data-theme='atelier'] [data-card-corners='rounded'] .card-media {
+    border-radius: 1rem !important;
+}
+.store-shell[data-theme='atelier'] [data-card-corners='rounded'].card-box {
+    border-radius: 1.5rem !important;
+}

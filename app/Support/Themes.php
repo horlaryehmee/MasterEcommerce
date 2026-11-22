@@ -173,7 +173,13 @@ class Themes
             return $s;
         }
 
-        return (clone $s)->forceFill(self::ALL[$preview]['style']);
+        return (clone $s)->forceFill(self::styleOf($preview));
+    }
+
+    /** A template's branding, with product cards exactly as the template designs them. */
+    protected static function styleOf(string $key): array
+    {
+        return [...self::ALL[$key]['style'], 'product_card_shape' => 'auto', 'product_card_corners' => 'auto'];
     }
 
     /**
@@ -183,7 +189,7 @@ class Themes
      */
     public static function apply(BusinessSetting $s, string $key, bool $withStyle): void
     {
-        $s->update(['theme' => $key, ...($withStyle ? self::ALL[$key]['style'] : [])]);
+        $s->update(['theme' => $key, ...($withStyle ? self::styleOf($key) : [])]);
     }
 
     /** Shareable link that opens the storefront in preview mode for one template. */

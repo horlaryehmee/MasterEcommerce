@@ -13,7 +13,7 @@ use RuntimeException;
 class DatabaseBackup
 {
     /** @return array{tables: int, rows: int} */
-    public function dump(string $file): array
+    public function dump(string $file, string $title = 'Database backup made before updating'): array
     {
         $connection = DB::connection();
         $driver = $connection->getDriverName();
@@ -41,7 +41,7 @@ class DatabaseBackup
         }
 
         $write = fn (string $s) => gzwrite($out, $s);
-        $write("-- Database backup made before updating, ".now()->toDateTimeString()."\n");
+        $write("-- {$title}, ".now()->toDateTimeString()."\n");
         $write("SET NAMES utf8mb4;\nSET FOREIGN_KEY_CHECKS=0;\nSET SQL_MODE='NO_AUTO_VALUE_ON_ZERO';\n\n");
 
         $tables = $pdo->query("SHOW FULL TABLES WHERE Table_type = 'BASE TABLE'")->fetchAll(PDO::FETCH_NUM);

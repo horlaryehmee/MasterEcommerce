@@ -36,6 +36,16 @@ class DemoHomepageSeeder extends Seeder
             'hero_secondary_text' => 'Chat on WhatsApp',
             'hero_secondary_link' => 'whatsapp',
 
+            // Scrolling text strip under the hero (Website Content → Scrolling text strip).
+            'marquee_enabled' => true,
+            'marquee_items' => ['New arrivals every week', 'Same-day delivery in Lagos', 'Pay on delivery available', 'Genuine products, quality checked', 'Chat with us on WhatsApp'],
+            'marquee_separator' => '✱',
+            'marquee_bg_color' => '#FFFFFF',
+            'marquee_text_color' => '#111111',
+            'marquee_border' => true,
+            'marquee_uppercase' => true,
+            'marquee_speed' => 'normal',
+
             'categories_enabled' => true,
             'categories_heading' => 'Shop by Category',
             'categories_subheading' => 'Find exactly what you need across our carefully curated collections.',

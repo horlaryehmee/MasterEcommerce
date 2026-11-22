@@ -151,7 +151,7 @@ function Title({ product, rounded = 'after:rounded-3xl', className = '' }) {
     return (
         <>
             <h3 className={`line-clamp-2 text-sm leading-snug font-medium text-stone-800 sm:text-[15px] ${className}`}>
-                <Link href={product.url} prefetch="hover" className={`underline-offset-4 after:absolute after:inset-0 ${rounded} group-hover:text-stone-950 group-hover:underline focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-accent focus-visible:after:ring-offset-4`}>
+                <Link href={product.url} prefetch="hover" className={`card-link underline-offset-4 after:absolute after:inset-0 ${rounded} group-hover:text-stone-950 group-hover:underline focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-accent focus-visible:after:ring-offset-4`}>
                     {product.name}
                 </Link>
             </h3>
@@ -168,10 +168,10 @@ function SoldOutChip() {
     return <span className="pointer-events-none absolute right-2.5 bottom-2.5 left-2.5 rounded-full bg-white/95 py-2 text-center text-xs font-semibold text-stone-700 backdrop-blur sm:right-3 sm:bottom-3 sm:left-3">Sold out</span>;
 }
 
-function ModernCard({ product, eager, quickAdd, soldOut, note, preview }) {
+function ModernCard({ product, eager, quickAdd, soldOut, note, preview, frame }) {
     return (
-        <article className="group relative flex flex-col transition-transform duration-200 ease-out [@media(hover:none)]:active:scale-[0.98]">
-            <div className="relative aspect-square overflow-hidden rounded-3xl bg-stone-100 ring-1 ring-stone-900/5 ring-inset">
+        <article {...frame} className="group relative flex flex-col transition-transform duration-200 ease-out [@media(hover:none)]:active:scale-[0.98]">
+            <div className="card-media relative aspect-square overflow-hidden rounded-3xl bg-stone-100 ring-1 ring-stone-900/5 ring-inset">
                 <Picture product={product} eager={eager} soldOut={soldOut} />
                 <Badges product={product} />
                 {soldOut && <SoldOutChip />}
@@ -189,10 +189,10 @@ function ModernCard({ product, eager, quickAdd, soldOut, note, preview }) {
     );
 }
 
-function ClassicCard({ product, eager, quickAdd, soldOut, note }) {
+function ClassicCard({ product, eager, quickAdd, soldOut, note, frame }) {
     return (
-        <article className="group relative flex flex-col transition-transform duration-200 ease-out [@media(hover:none)]:active:scale-[0.98]">
-            <div className="relative aspect-square overflow-hidden rounded-2xl bg-stone-100">
+        <article {...frame} className="group relative flex flex-col transition-transform duration-200 ease-out [@media(hover:none)]:active:scale-[0.98]">
+            <div className="card-media relative aspect-square overflow-hidden rounded-2xl bg-stone-100">
                 <Picture product={product} eager={eager} soldOut={soldOut} />
                 <Badges product={product} />
             </div>
@@ -218,10 +218,10 @@ function ClassicCard({ product, eager, quickAdd, soldOut, note }) {
     );
 }
 
-function BoxedCard({ product, eager, quickAdd, soldOut, note }) {
+function BoxedCard({ product, eager, quickAdd, soldOut, note, frame }) {
     return (
-        <article className="group relative flex flex-col rounded-3xl border border-stone-200 bg-white p-2 transition duration-300 hover:-translate-y-0.5 [@media(hover:none)]:active:scale-[0.98] hover:border-stone-300 hover:shadow-xl hover:shadow-stone-900/5 sm:p-2.5">
-            <div className="relative aspect-square overflow-hidden rounded-2xl bg-stone-100">
+        <article {...frame} className="card-box group relative flex flex-col rounded-3xl border border-stone-200 bg-white p-2 transition duration-300 hover:-translate-y-0.5 [@media(hover:none)]:active:scale-[0.98] hover:border-stone-300 hover:shadow-xl hover:shadow-stone-900/5 sm:p-2.5">
+            <div className="card-media relative aspect-square overflow-hidden rounded-2xl bg-stone-100">
                 <Picture product={product} eager={eager} soldOut={soldOut} />
                 <Badges product={product} />
                 {soldOut && <SoldOutChip />}
@@ -262,17 +262,17 @@ function BarButton({ product, forceVisible = false }) {
 }
 
 /** Portrait: tall 3:4 photos, square corners, quiet text — lets clothing take the stage. */
-function PortraitCard({ product, eager, quickAdd, soldOut, note, preview }) {
+function PortraitCard({ product, eager, quickAdd, soldOut, note, preview, frame }) {
     return (
-        <article className="group relative flex flex-col">
-            <div className="relative aspect-[3/4] overflow-hidden bg-stone-100">
+        <article {...frame} className="group relative flex flex-col">
+            <div className="card-media card-sharp relative aspect-[3/4] overflow-hidden bg-stone-100">
                 <Picture product={product} eager={eager} soldOut={soldOut} />
                 <Badges product={product} />
                 {soldOut && <SoldOutChip />}
                 {quickAdd && !soldOut && <BarButton product={product} forceVisible={preview} />}
             </div>
             <div className="mt-3 flex flex-1 flex-col">
-                <Title product={product} rounded="after:rounded-none" className="text-[13px] tracking-wide sm:text-sm" />
+                <Title product={product} rounded="after:rounded-none card-sharp" className="text-[13px] tracking-wide sm:text-sm" />
                 <div className="mt-1">
                     <PriceTag price={product.price} compareAt={product.compare_at_price} from={product.price_from} />
                 </div>
@@ -283,10 +283,10 @@ function PortraitCard({ product, eager, quickAdd, soldOut, note, preview }) {
 }
 
 /** Soft (Glow): a rounded tinted card, centred text and a round add button. */
-function SoftCard({ product, eager, quickAdd, soldOut, note }) {
+function SoftCard({ product, eager, quickAdd, soldOut, note, frame }) {
     return (
-        <article className="group relative flex flex-col rounded-[1.75rem] bg-surface/70 p-2 text-center transition duration-300 hover:bg-surface sm:p-2.5">
-            <div className="relative aspect-square overflow-hidden rounded-[1.4rem] bg-white">
+        <article {...frame} className="card-box group relative flex flex-col rounded-[1.75rem] bg-surface/70 p-2 text-center transition duration-300 hover:bg-surface sm:p-2.5">
+            <div className="card-media relative aspect-square overflow-hidden rounded-[1.4rem] bg-white">
                 <Picture product={product} eager={eager} soldOut={soldOut} />
                 <Badges product={product} />
                 {soldOut && <SoldOutChip />}
@@ -307,16 +307,20 @@ const CARDS = { modern: ModernCard, classic: ClassicCard, boxed: BoxedCard, port
 
 /**
  * Product card in the design chosen in Admin → Website Settings → Branding.
- * `variant`, `quickAdd` and `preview` (buttons always visible) are for the admin previews.
+ * `variant`, `shape`, `corners`, `quickAdd` and `preview` (buttons always visible) are for the admin previews.
  */
-export default function ProductCard({ product, eager = false, variant, quickAdd, preview = false }) {
+export default function ProductCard({ product, eager = false, variant, shape, corners, quickAdd, preview = false }) {
     const { store } = usePage().props;
     const Card = CARDS[variant || store?.card_style] || ModernCard;
+    // Image shape and corners chosen on top of the design ("auto" = as the design does it).
+    const s = shape || store?.card_shape;
+    const c = corners || store?.card_corners;
+    const frame = { 'data-card-shape': s && s !== 'auto' ? s : undefined, 'data-card-corners': c && c !== 'auto' ? c : undefined };
     const soldOut = product.availability === 'out_of_stock';
     const note = !soldOut && product.availability !== 'in_stock' ? product.availability_label : null;
     const canQuickAdd = quickAdd ?? (!!store?.shop_enabled && !!product.purchasable);
 
-    return <Card product={product} eager={eager} quickAdd={canQuickAdd} soldOut={soldOut} note={note} preview={preview} />;
+    return <Card product={product} eager={eager} quickAdd={canQuickAdd} soldOut={soldOut} note={note} preview={preview} frame={frame} />;
 }
 
 export function ProductGrid({ products, eagerCount = 0 }) {

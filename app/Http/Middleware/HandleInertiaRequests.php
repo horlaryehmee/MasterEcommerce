@@ -64,7 +64,7 @@ class HandleInertiaRequests extends Middleware
             'store' => $isAdmin ? null : fn () => [
                 ...StorefrontCache::remember('shared', fn () => $this->storefront()),
                 // Depends on a template preview, so outside the cache.
-                'card_style' => $this->cardStyle(Themes::effectiveSettings(null, $request)),
+                ...$this->cardOptions(Themes::effectiveSettings(null, $request)),
             ],
             // Storefront template layout (Admin → Templates), and the preview bar while previewing one.
             'theme' => $isAdmin ? null : fn () => Themes::shared($request),
@@ -91,9 +91,14 @@ class HandleInertiaRequests extends Middleware
         ];
     }
 
-    protected function cardStyle(BusinessSetting $s): string
+    /** Product card design, plus the image shape and corners chosen on top of it. */
+    protected function cardOptions(BusinessSetting $s): array
     {
-        return array_key_exists($s->product_card_style, BusinessSetting::CARD_STYLES) ? $s->product_card_style : 'modern';
+        return [
+            'card_style' => array_key_exists($s->product_card_style, BusinessSetting::CARD_STYLES) ? $s->product_card_style : 'modern',
+            'card_shape' => array_key_exists((string) $s->product_card_shape, BusinessSetting::CARD_SHAPES) ? $s->product_card_shape : 'auto',
+            'card_corners' => array_key_exists((string) $s->product_card_corners, BusinessSetting::CARD_CORNERS) ? $s->product_card_corners : 'auto',
+        ];
     }
 
     protected function brand(): array

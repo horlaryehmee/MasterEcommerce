@@ -44,8 +44,11 @@ class TemplatesTest extends TestCase
         $this->assertSame('glow', $s->theme);
         $this->assertSame('#111827', $s->primary_color, 'Brand colours kept.');
 
+        // Card shape/corner choices are kept without the template's style, reset with it.
+        BusinessSetting::current()->update(['product_card_shape' => 'square', 'product_card_corners' => 'rounded']);
         $this->asOwner()->put('/admin/templates', ['theme' => 'atelier', 'with_style' => true])->assertSessionHasNoErrors();
         $s = BusinessSetting::current()->fresh();
+        $this->assertSame(['auto', 'auto'], [$s->product_card_shape, $s->product_card_corners]);
         $this->assertSame('atelier', $s->theme);
         $this->assertSame('Cormorant Garamond', $s->heading_font);
         $this->assertSame('portrait', $s->product_card_style);

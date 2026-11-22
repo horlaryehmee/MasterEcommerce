@@ -420,6 +420,7 @@ The separate **Central Update Management** app (`../central-management`, see its
 - Every few minutes the site checks in (outgoing HTTPS only); central never logs in to the site or its database, and the shop works normally if central is offline.
 - Updates are verified (Ed25519 signature, package and per-file SHA-256, compatibility, client binding), wait while customers are checking out, back up the database, swap files with automatic rollback, migrate in a fresh process, and report the real result.
 - **Hand-edited core files are never overwritten**: the update is refused and the changed files listed.
+- **Backups on request**: central's "Create backup" makes the site build a zip (database dump, plus uploads and payment receipts if asked; never `.env` or code) and upload it in resumable chunks at its next check-in. Central stores it encrypted. Each backup is written to the site's update log. Set `AGENT_ALLOW_BACKUPS=false` to refuse backups.
 - When connected, the GitHub one-click flow below is hidden; updates come from central.
 
 **Modules and client extensions.** Optional features live in `modules/<slug>/`, code for one client in `extensions/<slug>/` (each with a `module.json`; see the READMEs in those folders and `../central-management/docs/examples/`). Core updates never touch them; they have their own releases. Package one with `php artisan release:package module|extension <slug>`.

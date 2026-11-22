@@ -277,7 +277,7 @@ export const SECTIONS = [
                     { t: 'Tap **Business information**. Enter your business name, upload your **logo**, and fill in your phone, email, address and opening hours. They appear in your website’s header, footer and contact page.', img: 'settings-business' },
                     { t: 'Tap **Save** at the bottom.' },
                 ],
-                tips: ['**Branding** changes your website’s colours and fonts. **Currency** sets the money symbol and how prices look (for example ₦1,000).'],
+                tips: ['**Branding** changes your website’s colours and fonts, and how product cards look: the card design, the **image shape** (square or portrait/tall) and the **corners** (rounded or sharp). The previews update as you choose.', 'Changing **Branding**? Tap **Save changes** at the bottom when you’re happy with the previews.', '**Currency** sets the money symbol and how prices look (for example ₦1,000).'],
             },
             {
                 id: 'payment-options',

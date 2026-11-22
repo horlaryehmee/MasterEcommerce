@@ -36,6 +36,20 @@ class BusinessSetting extends Model
         'soft' => ['Soft', 'Rounded cards on a soft tint, centred text and a round add button — gentle and friendly.'],
     ];
 
+    /** Product card image shape, on top of the card design ("auto" = as the design does it). */
+    public const CARD_SHAPES = [
+        'auto' => 'As designed',
+        'square' => 'Square',
+        'portrait' => 'Portrait (tall)',
+    ];
+
+    /** Product card corners, on top of the card design ("auto" = as the design does it). */
+    public const CARD_CORNERS = [
+        'auto' => 'As designed',
+        'rounded' => 'Rounded',
+        'sharp' => 'Sharp',
+    ];
+
     protected $guarded = ['id', 'created_at', 'updated_at'];
 
     protected $attributes = [
@@ -49,6 +63,8 @@ class BusinessSetting extends Model
         'secondary_color' => '#F4F1EC',
         'accent_color' => '#C2410C',
         'product_card_style' => 'modern',
+        'product_card_shape' => 'auto',
+        'product_card_corners' => 'auto',
         'theme' => 'essential',
         'button_shape' => 'pill',
         'currency_code' => 'NGN',

@@ -127,6 +127,8 @@ class SettingsController extends Controller
                 'buttonShapes' => collect(Fonts::BUTTON_SHAPES)->map(fn ($label, $value) => ['value' => $value, 'label' => $label])->values(),
             ],
             'cardStyles' => collect(BusinessSetting::CARD_STYLES)->map(fn ($c, $key) => ['value' => $key, 'label' => $c[0], 'description' => $c[1]])->values(),
+            'cardShapes' => BusinessSetting::CARD_SHAPES,
+            'cardCorners' => BusinessSetting::CARD_CORNERS,
             // A real product for the card previews (a discounted one shows the most).
             'sampleProduct' => fn () => Product::query()->visible()->with(['primaryImage', 'category:id,name'])
                 ->orderByRaw('compare_at_price IS NULL')->orderByDesc('is_featured')->first()?->toCard(),
@@ -528,6 +530,8 @@ If you can read this, your website can send emails: you'll get an email for ever
                 'secondary_color' => $hex,
                 'accent_color' => $hex,
                 'product_card_style' => ['sometimes', 'required', Rule::in(array_keys(BusinessSetting::CARD_STYLES))],
+                'product_card_shape' => ['sometimes', 'required', Rule::in(array_keys(BusinessSetting::CARD_SHAPES))],
+                'product_card_corners' => ['sometimes', 'required', Rule::in(array_keys(BusinessSetting::CARD_CORNERS))],
                 // Any Google Fonts family; the name goes into CSS and a URL, so only letters, digits and spaces.
                 'heading_font' => ['nullable', 'string', 'max:60', 'regex:/^[A-Za-z0-9][A-Za-z0-9 ]{0,59}$/'],
                 'body_font' => ['nullable', 'string', 'max:60', 'regex:/^[A-Za-z0-9][A-Za-z0-9 ]{0,59}$/'],

@@ -135,7 +135,7 @@ function Business({ s }) {
 const PLACEHOLDER_PRODUCT = { id: 0, name: 'Sample product name', url: '#', price: '₦25,000', compare_at_price: '₦30,000', discount_percent: 17, is_new_arrival: true, category: 'Category', availability: 'in_stock', purchasable: true, image: null };
 
 /** Pick a product card design, each previewed with a real product. */
-function CardStylePicker({ styles, value, onChange, product }) {
+function CardStylePicker({ styles, value, onChange, product, shape, corners }) {
     const sample = product || PLACEHOLDER_PRODUCT;
     return (
         <div className="grid gap-4 sm:grid-cols-3" role="radiogroup" aria-label="Product card design">
@@ -152,7 +152,7 @@ function CardStylePicker({ styles, value, onChange, product }) {
                     >
                         {/* Live preview; not interactive. */}
                         <div className="pointer-events-none mx-auto w-full max-w-[200px] select-none" inert>
-                            <ProductCard product={sample} variant={style.value} quickAdd preview />
+                            <ProductCard product={sample} variant={style.value} shape={shape} corners={corners} quickAdd preview />
                         </div>
                         <span className="mt-4 flex items-center gap-2 text-sm font-semibold text-zinc-900">
                             <span className={`flex h-4 w-4 items-center justify-center rounded-full border ${on ? 'border-zinc-900 bg-zinc-900' : 'border-zinc-300'}`}>{on && <span className="h-1.5 w-1.5 rounded-full bg-white" />}</span>
@@ -166,14 +166,40 @@ function CardStylePicker({ styles, value, onChange, product }) {
     );
 }
 
+/** Two or three choices side by side, e.g. image shape. */
+function Segmented({ label, help, options, value, onChange }) {
+    return (
+        <div>
+            <p className="text-sm font-medium text-zinc-900">{label}</p>
+            {help && <p className="mt-0.5 text-xs text-zinc-500">{help}</p>}
+            <div className="mt-2 grid grid-cols-3 gap-1 rounded-xl bg-zinc-100 p-1" role="radiogroup" aria-label={label}>
+                {Object.entries(options).map(([key, text]) => (
+                    <button
+                        key={key}
+                        type="button"
+                        role="radio"
+                        aria-checked={value === key}
+                        onClick={() => onChange(key)}
+                        className={`min-h-10 rounded-lg px-2 py-2 text-[13px] font-medium transition ${value === key ? 'bg-white text-zinc-900 shadow-sm ring-1 ring-zinc-200' : 'text-zinc-600 hover:text-zinc-900'}`}
+                    >
+                        {text}
+                    </button>
+                ))}
+            </div>
+        </div>
+    );
+}
+
 const BUTTON_RADIUS = { pill: '9999px', rounded: '0.5rem', square: '0' };
 
-function Branding({ s, fonts, cardStyles, sampleProduct }) {
+function Branding({ s, fonts, cardStyles, cardShapes, cardCorners, sampleProduct }) {
     const form = useForm({
         primary_color: s.primary_color,
         secondary_color: s.secondary_color,
         accent_color: s.accent_color,
         product_card_style: s.product_card_style || 'modern',
+        product_card_shape: s.product_card_shape || 'auto',
+        product_card_corners: s.product_card_corners || 'auto',
         heading_font: s.heading_font ?? '',
         body_font: s.body_font ?? '',
         heading_weight: s.heading_weight ?? '',
@@ -281,7 +307,11 @@ function Branding({ s, fonts, cardStyles, sampleProduct }) {
                 <div className="mt-8 border-t border-zinc-100 pt-6">
                     <h3 className="text-sm font-semibold text-zinc-900">Product cards</h3>
                     <p className="mt-0.5 mb-4 text-sm text-zinc-500">How products look in the shop, category pages and homepage sections. The preview uses your saved colours.</p>
-                    <CardStylePicker styles={cardStyles} value={form.data.product_card_style} onChange={(v) => form.setData('product_card_style', v)} product={sampleProduct} />
+                    <div className="mb-5 grid gap-4 sm:grid-cols-2">
+                        <Segmented label="Image shape" help="Square suits most products. Portrait (tall) suits clothing and bottles." options={cardShapes} value={form.data.product_card_shape} onChange={(v) => form.setData('product_card_shape', v)} />
+                        <Segmented label="Corners" help="Rounded looks soft and friendly. Sharp looks crisp and premium." options={cardCorners} value={form.data.product_card_corners} onChange={(v) => form.setData('product_card_corners', v)} />
+                    </div>
+                    <CardStylePicker styles={cardStyles} value={form.data.product_card_style} onChange={(v) => form.setData('product_card_style', v)} product={sampleProduct} shape={form.data.product_card_shape} corners={form.data.product_card_corners} />
                 </div>
                 <SaveBar form={form} />
             </Card>
@@ -1159,12 +1189,12 @@ function Redirects({ redirects }) {
     );
 }
 
-export default function SettingsEdit({ tab, tabChosen, settings, paystack, socials, countries, shipTo, shippingZones, hasWhatsapp, titleSeparators, timezones, redirects, appIsProduction, mail, mailers, mailEncryptions, serverMailer, adminEmail, fonts, cardStyles, sampleProduct, currencyPresets, pricePreview, whatsappPreview }) {
+export default function SettingsEdit({ tab, tabChosen, settings, paystack, socials, countries, shipTo, shippingZones, hasWhatsapp, titleSeparators, timezones, redirects, appIsProduction, mail, mailers, mailEncryptions, serverMailer, adminEmail, fonts, cardStyles, cardShapes, cardCorners, sampleProduct, currencyPresets, pricePreview, whatsappPreview }) {
     const choose = (key) => router.get('/admin/settings', { tab: key }, { preserveScroll: true, preserveState: false, replace: true });
 
     const panels = {
         business: <Business s={settings} />,
-        branding: <Branding s={settings} fonts={fonts} cardStyles={cardStyles} sampleProduct={sampleProduct} />,
+        branding: <Branding s={settings} fonts={fonts} cardStyles={cardStyles} cardShapes={cardShapes} cardCorners={cardCorners} sampleProduct={sampleProduct} />,
         currency: <Currency s={settings} presets={currencyPresets} pricePreview={pricePreview} />,
         whatsapp: <WhatsApp s={settings} whatsappPreview={whatsappPreview} />,
         shop: <Shop s={settings} hasWhatsapp={hasWhatsapp} mail={mail} paystack={paystack} />,

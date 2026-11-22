@@ -44,6 +44,9 @@ class DemoSeederTest extends TestCase
         $this->assertSame(1, User::count());
         Storage::disk('public')->assertExists(BusinessSetting::current()->logo_path);
         $this->assertNotNull(HomepageSetting::current()->hero_image_path);
+        // Scrolling text strip under the hero.
+        $this->assertTrue((bool) HomepageSetting::current()->marquee_enabled);
+        $this->assertCount(5, HomepageSetting::current()->marquee_items);
 
         // Reviews: every review's product exists, ratings are cached, and the homepage section shows.
         $expected = count(array_merge(...array_values(DemoReviewSeeder::reviews())));

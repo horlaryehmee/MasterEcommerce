@@ -128,8 +128,9 @@ class Agent
                 }
             }
 
+            $backups = app(SiteBackup::class);
             $due = $force || ! $connection->last_attempt_at || $connection->last_attempt_at->lte(now()->subMinutes($connection->check_interval))
-                || $this->job() !== null;
+                || $this->job() !== null || $backups->state() !== [];
             if (! $due) {
                 return ['status' => 'idle', 'message' => 'Not due yet.'];
             }
@@ -141,8 +142,18 @@ class Agent
                 return ['status' => 'offline', 'message' => $e->getMessage()];
             }
             $instruction = $response['instructions'][0] ?? null;
+
+            // A backup this site was still sending that the server no longer asks for (cancelled): drop it.
+            $sending = $backups->state()['id'] ?? null;
+            if ($sending !== null && (($instruction['type'] ?? null) !== 'backup' || (int) $instruction['target'] !== $sending)) {
+                $backups->discard();
+            }
+
             if (! $work || ! $instruction) {
                 return ['status' => 'ok', 'message' => $instruction ? 'An update is waiting.' : 'No instructions.'];
+            }
+            if ($instruction['type'] === 'backup') {
+                return $backups->run($connection, $this->client($connection), (int) $instruction['target']);
             }
 
             return $instruction['type'] === 'rollback'
@@ -166,6 +177,8 @@ class Agent
                 'framework' => app()->version(),
                 'server' => $this->serverInfo(),
                 'modules' => $this->modules->report(),
+                // Lets the server know it may ask this site for a backup (older agents send nothing).
+                'capabilities' => SiteBackup::enabled() ? ['backup'] : [],
             ]);
         } catch (AgentException $e) {
             $connection->forceFill(['last_error' => $e->getMessage()])->save();

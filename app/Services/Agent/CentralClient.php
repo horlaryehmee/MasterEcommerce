@@ -55,6 +55,12 @@ class CentralClient
         return self::decode($this->send('POST', $path, $body));
     }
 
+    /** POST raw bytes (a backup chunk), signed over exactly those bytes. */
+    public function upload(string $path, string $bytes, array $headers = []): array
+    {
+        return self::decode($this->send('POST', $path, null, null, 1, $headers, $bytes));
+    }
+
     /**
      * Download a file to $sink. An interrupted download resumes where it stopped
      * (HTTP Range), so a flaky connection or a host that drops long transfers
@@ -103,10 +109,10 @@ class CentralClient
     }
 
     /** @param  resource|string|null  $sink */
-    protected function send(string $method, string $path, ?array $body = null, $sink = null, int $attempt = 1, array $headers = []): Response
+    protected function send(string $method, string $path, ?array $body = null, $sink = null, int $attempt = 1, array $headers = [], ?string $raw = null): Response
     {
         $path = ltrim($path, '/');
-        $json = $body === null ? '' : json_encode($body, JSON_UNESCAPED_SLASHES);
+        $json = $raw ?? ($body === null ? '' : json_encode($body, JSON_UNESCAPED_SLASHES));
         $timestamp = (string) time();
         $nonce = Str::random(32);
         $signature = hash_hmac('sha256', implode("\n", [$method, $path, $timestamp, $nonce, hash('sha256', $json)]), $this->connection->secret);
@@ -132,7 +138,7 @@ class CentralClient
         try {
             return $method === 'GET'
                 ? $request->get($url)
-                : $request->withBody($json, 'application/json')->send($method, $url);
+                : $request->withBody($json, $raw !== null ? 'application/octet-stream' : 'application/json')->send($method, $url);
         } catch (ConnectionException $e) {
             // Reads are safe to repeat (each time with a fresh signature and nonce). Downloads resume instead.
             if ($method === 'GET' && $sink === null && $attempt < 3) {

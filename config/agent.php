@@ -7,6 +7,10 @@
  * The shop works normally whether or not the update server is reachable.
  */
 return [
+    // Let the update server ask this site for a backup (database and uploaded files), which the
+    // site then sends to it. Every backup is written to the update log. false = never.
+    'allow_backups' => (bool) env('AGENT_ALLOW_BACKUPS', true),
+
     // Plain-HTTP update server addresses are refused unless this is true (local testing only).
     'allow_insecure' => (bool) env('AGENT_ALLOW_INSECURE', false),
 
