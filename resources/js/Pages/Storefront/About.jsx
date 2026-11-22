@@ -7,7 +7,7 @@ import './about.css';
 const WIDTH = 'mx-auto max-w-7xl px-5 sm:px-6 md:px-12';
 const PILL = 'inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-semibold transition-colors';
 
-export default function About({ page, values, collection, stats = [] }) {
+export default function About({ page, values, collection, stats = [], cta }) {
     const { brand } = usePage().props;
     const heading = page.headline || brand.name || page.title;
     const hasStory = Boolean(page.content_html?.trim());
@@ -88,12 +88,18 @@ export default function About({ page, values, collection, stats = [] }) {
                 <section aria-labelledby="explore-heading" className={`${WIDTH} py-16 md:py-20`}>
                     <div className="flex flex-col items-start justify-between gap-8 rounded-[10px] bg-brand px-6 py-12 text-on-brand sm:px-8 md:flex-row md:items-center md:px-12 md:py-16">
                         <div className="flex max-w-xl flex-col gap-2">
-                            <h2 id="explore-heading" className="text-[1.65rem] leading-tight font-semibold tracking-[-0.01em] text-balance md:text-[2.25rem]">Ready to explore the store?</h2>
-                            <p className="text-lg leading-relaxed text-pretty opacity-75">See everything we have, with clear photos and honest prices.</p>
+                            <h2 id="explore-heading" className="text-[1.65rem] leading-tight font-semibold tracking-[-0.01em] text-balance md:text-[2.25rem]">{cta.heading}</h2>
+                            {cta.text && <p className="text-lg leading-relaxed text-pretty opacity-75">{cta.text}</p>}
                         </div>
-                        <Link href="/products" className={`${PILL} shrink-0 bg-white px-7 text-stone-900 hover:bg-stone-100`}>
-                            Browse products <ArrowRight size={17} aria-hidden />
-                        </Link>
+                        {/^https?:\/\//i.test(cta.link) ? (
+                            <a href={cta.link} target="_blank" rel="noopener noreferrer" className={`${PILL} shrink-0 bg-white px-7 text-stone-900 hover:bg-stone-100`}>
+                                {cta.button} <ArrowRight size={17} aria-hidden />
+                            </a>
+                        ) : (
+                            <Link href={cta.link} className={`${PILL} shrink-0 bg-white px-7 text-stone-900 hover:bg-stone-100`}>
+                                {cta.button} <ArrowRight size={17} aria-hidden />
+                            </Link>
+                        )}
                     </div>
                 </section>
             </article>

@@ -26,11 +26,13 @@ class PageController extends Controller
                 'url' => $page->url(),
                 'faq_items' => $page->faq_items ?? [],
                 'stats' => array_slice($page->extras['stats'] ?? [], 0, 3),
+                'cta' => array_merge(array_fill_keys(array_keys(Page::ABOUT_CTA), ''), array_filter($page->extras['cta'] ?? [], 'is_string')),
                 'image_url' => Media::url($page->image_path, 'sm'),
             ],
             // Extra editors shown only where the page layout uses them.
             'supportsImage' => $page->slug === 'about',
             'supportsFaq' => $page->slug === 'faq',
+            'ctaDefaults' => Page::ABOUT_CTA,
         ]);
     }
 
@@ -62,6 +64,13 @@ class PageController extends Controller
                 'stats' => ['nullable', 'array', 'max:3'],
                 'stats.*.value' => ['required', 'string', 'max:20'],
                 'stats.*.label' => ['required', 'string', 'max:60'],
+                // The closing box; empty fields use the standard wording.
+                'cta' => ['nullable', 'array'],
+                'cta.heading' => ['nullable', 'string', 'max:120'],
+                'cta.text' => ['nullable', 'string', 'max:240'],
+                'cta.button' => ['nullable', 'string', 'max:40'],
+                // A page on this site (/products) or a full web address; never javascript: and the like.
+                'cta.link' => ['nullable', 'string', 'max:255', 'regex:#^(/(?![/\\\\])|https?://)#i'],
             ];
         }
 
@@ -70,13 +79,15 @@ class PageController extends Controller
             'faq_items.*.answer.required' => 'Each question needs an answer.',
             'stats.*.value.required' => 'Enter the number, e.g. 5,000+.',
             'stats.*.label.required' => 'Say what it counts, e.g. Happy customers.',
+            'cta.link.regex' => 'Use a page on this site such as /products, or a full address starting with https://.',
         ]);
 
         if ($page->slug === 'about') {
             $data['extras'] = [
                 'stats' => collect($data['stats'] ?? [])->map(fn ($s) => ['value' => trim($s['value']), 'label' => trim($s['label'])])->values()->all(),
+                'cta' => collect(Page::ABOUT_CTA)->map(fn ($default, $key) => trim((string) ($data['cta'][$key] ?? '')))->all(),
             ];
-            unset($data['stats']);
+            unset($data['stats'], $data['cta']);
         }
 
         if ($page->slug === 'faq') {

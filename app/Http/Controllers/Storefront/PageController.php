@@ -75,6 +75,10 @@ class PageController extends StorefrontController
                 'image' => Media::image($category->image_path, $category->name),
             ] : null,
             'stats' => $stats->all(),
+            // Closing box: the owner's wording, or the standard one for empty fields.
+            'cta' => collect(Page::ABOUT_CTA)->map(fn ($default, $key) => filled($page->extras['cta'][$key] ?? null)
+                ? ($key === 'link' ? $page->extras['cta'][$key] : $this->fill($page->extras['cta'][$key], $settings))
+                : $default)->all(),
         ], $seo->image(Media::url($imagePath)));
     }
 

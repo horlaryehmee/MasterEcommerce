@@ -49,12 +49,15 @@ function FaqEditor({ form }) {
     );
 }
 
-/** About page extras: up to three headline numbers shown beside the story. */
-function AboutExtras({ form }) {
+/** About page extras: up to three headline numbers beside the story, and the closing box. */
+function AboutExtras({ form, ctaDefaults = {} }) {
     const stats = form.data.stats;
     const setStat = (i, key, value) => form.setData('stats', stats.map((s, j) => (j === i ? { ...s, [key]: value } : s)));
+    const cta = form.data.cta;
+    const setCta = (key, value) => form.setData('cta', { ...cta, [key]: value });
 
     return (
+        <>
         <Card title="Headline numbers" description="Up to three short facts shown under your story, e.g. 12,000+ Happy customers, 4.9 / 5 Average rating. Leave empty to hide.">
             <div className="space-y-3">
                 {stats.map((s, i) => (
@@ -78,10 +81,22 @@ function AboutExtras({ form }) {
                 )}
             </div>
         </Card>
+        <Card title="Closing box" description="The coloured box at the bottom of the page. Leave a field empty to use the wording shown in grey.">
+            <div className="space-y-5">
+                <TextInput label="Heading" maxLength={120} optional value={cta.heading} placeholder={ctaDefaults.heading} onChange={(e) => setCta('heading', e.target.value)} error={form.errors['cta.heading']} />
+                <Textarea label="Text" rows={2} maxLength={240} optional value={cta.text} placeholder={ctaDefaults.text} onChange={(e) => setCta('text', e.target.value)} error={form.errors['cta.text']} />
+                <div className="grid gap-5 sm:grid-cols-2">
+                    <TextInput label="Button text" maxLength={40} optional value={cta.button} placeholder={ctaDefaults.button} onChange={(e) => setCta('button', e.target.value)} error={form.errors['cta.button']} />
+                    <TextInput label="Button link" maxLength={255} optional value={cta.link} placeholder={ctaDefaults.link} onChange={(e) => setCta('link', e.target.value)} error={form.errors['cta.link']}
+                        help="A page on your site, e.g. /products, or a full web address." />
+                </div>
+            </div>
+        </Card>
+        </>
     );
 }
 
-export default function PageForm({ page, supportsImage, supportsFaq }) {
+export default function PageForm({ page, supportsImage, supportsFaq, ctaDefaults }) {
     const form = useForm({
         title: page.title ?? '',
         content: page.content ?? '',
@@ -90,6 +105,7 @@ export default function PageForm({ page, supportsImage, supportsFaq }) {
         seo_description: page.seo_description ?? '',
         faq_items: page.faq_items ?? [],
         stats: page.stats ?? [],
+        cta: page.cta ?? { heading: '', text: '', button: '', link: '' },
         image: null,
         remove_image: false,
     });
@@ -134,7 +150,7 @@ export default function PageForm({ page, supportsImage, supportsFaq }) {
                         </div>
                     </Card>
                     {supportsFaq && <FaqEditor form={form} />}
-                    {supportsImage && <AboutExtras form={form} />}
+                    {supportsImage && <AboutExtras form={form} ctaDefaults={ctaDefaults} />}
                 </div>
                 <div className="space-y-6">
                     {supportsImage && (

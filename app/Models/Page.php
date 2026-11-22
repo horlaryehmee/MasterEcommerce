@@ -9,6 +9,14 @@ use Illuminate\Database\Eloquent\Model;
 class Page extends Model
 {
     /** The informational pages every installation ships with: slug => default title. */
+    /** Wording of the About page's closing box, used for any field left empty. */
+    public const ABOUT_CTA = [
+        'heading' => 'Ready to explore the store?',
+        'text' => 'See everything we have, with clear photos and honest prices.',
+        'button' => 'Browse products',
+        'link' => '/products',
+    ];
+
     public const DEFAULTS = [
         'about' => 'About Us',
         'contact' => 'Contact Us',
