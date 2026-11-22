@@ -26,7 +26,7 @@ Route::prefix('install')->middleware(['throttle:30,1', \App\Http\Middleware\Requ
 
 Route::prefix('admin')->name('admin.')->group(function () {
     // Installable admin app (before login too, so the login page can be installed).
-    Route::get('manifest.webmanifest', [\App\Http\Controllers\PwaController::class, 'adminManifest'])->name('manifest');
+    Route::get('manifest.webmanifest', [\App\Http\Controllers\PwaController::class, 'adminManifest'])->withoutMiddleware(\App\Http\Controllers\PwaController::STATELESS)->name('manifest');
 
     Route::middleware('guest')->group(function () {
         Route::get('login', [AuthController::class, 'showLogin'])->name('login');
@@ -200,13 +200,14 @@ Route::get('payments/paystack/callback', [Storefront\PaystackController::class, 
 Route::post('payments/paystack/webhook', [Storefront\PaystackController::class, 'webhook'])->middleware('throttle:120,1')->name('payments.paystack.webhook');
 
 // Installable shop app: manifest, service worker (must be at the root), offline page, fallback icon.
-Route::get('manifest.webmanifest', [\App\Http\Controllers\PwaController::class, 'shopManifest'])->name('pwa.manifest');
-Route::get('sw.js', [\App\Http\Controllers\PwaController::class, 'serviceWorker'])->name('pwa.sw');
-Route::get('offline', [\App\Http\Controllers\PwaController::class, 'offline'])->name('pwa.offline');
-Route::get('pwa/icon/{app}.svg', [\App\Http\Controllers\PwaController::class, 'icon'])->whereIn('app', \App\Support\AppIcon::APPS)->name('pwa.icon');
+// Stateless (PwaController::STATELESS): the browser fetches these in the background.
+Route::get('manifest.webmanifest', [\App\Http\Controllers\PwaController::class, 'shopManifest'])->withoutMiddleware(\App\Http\Controllers\PwaController::STATELESS)->name('pwa.manifest');
+Route::get('sw.js', [\App\Http\Controllers\PwaController::class, 'serviceWorker'])->withoutMiddleware(\App\Http\Controllers\PwaController::STATELESS)->name('pwa.sw');
+Route::get('offline', [\App\Http\Controllers\PwaController::class, 'offline'])->withoutMiddleware(\App\Http\Controllers\PwaController::STATELESS)->name('pwa.offline');
+Route::get('pwa/icon/{app}.svg', [\App\Http\Controllers\PwaController::class, 'icon'])->whereIn('app', \App\Support\AppIcon::APPS)->withoutMiddleware(\App\Http\Controllers\PwaController::STATELESS)->name('pwa.icon');
 
-Route::get('sitemap.xml', [Storefront\SitemapController::class, 'sitemap'])->name('sitemap');
-Route::get('robots.txt', [Storefront\SitemapController::class, 'robots'])->name('robots');
+Route::get('sitemap.xml', [Storefront\SitemapController::class, 'sitemap'])->withoutMiddleware(\App\Http\Controllers\PwaController::STATELESS)->name('sitemap');
+Route::get('robots.txt', [Storefront\SitemapController::class, 'robots'])->withoutMiddleware(\App\Http\Controllers\PwaController::STATELESS)->name('robots');
 
 // Informational pages: /about, /contact, /faq, /privacy-policy, ...
 Route::get('{slug}', [Storefront\PageController::class, 'show'])

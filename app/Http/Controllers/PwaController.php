@@ -16,6 +16,19 @@ use Illuminate\Support\Str;
  */
 class PwaController extends Controller
 {
+    /**
+     * Middleware left out for files the browser fetches in the background (service worker,
+     * manifests, icons, offline page, sitemap, robots.txt). Without a session they can't become
+     * the "previous page": otherwise a back() redirect after a form could land on /sw.js.
+     */
+    public const STATELESS = [
+        \Illuminate\Session\Middleware\StartSession::class,
+        \Illuminate\View\Middleware\ShareErrorsFromSession::class,
+        \Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class,
+        \Illuminate\Session\Middleware\AuthenticateSession::class,
+        \App\Http\Middleware\HandleInertiaRequests::class,
+    ];
+
     public function shopManifest(): JsonResponse
     {
         $s = BusinessSetting::current();

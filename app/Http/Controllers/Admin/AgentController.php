@@ -25,17 +25,17 @@ class AgentController extends Controller
         try {
             $connection = $this->agent->connect($data['server_url'], $data['code']);
         } catch (AgentException $e) {
-            return back()->withErrors(['code' => $e->getMessage()])->withInput($request->only('server_url'));
+            return redirect()->route('admin.updates.index')->withErrors(['code' => $e->getMessage()])->withInput($request->only('server_url'));
         }
 
-        return back()->with('success', 'Connected to the update server. Key fingerprint: '.$connection->signing_fingerprint);
+        return redirect()->route('admin.updates.index')->with('success', 'Connected to the update server. Key fingerprint: '.$connection->signing_fingerprint);
     }
 
     public function disconnect(): RedirectResponse
     {
         $this->agent->disconnect();
 
-        return back()->with('success', 'Disconnected from the update server.');
+        return redirect()->route('admin.updates.index')->with('success', 'Disconnected from the update server.');
     }
 
     /** Check in now (no installing). */
@@ -43,10 +43,10 @@ class AgentController extends Controller
     {
         $result = $this->agent->sync(force: true, work: false);
         if ($result['status'] === 'offline') {
-            return back()->with('error', 'Could not reach the update server: '.$result['message']);
+            return redirect()->route('admin.updates.index')->with('error', 'Could not reach the update server: '.$result['message']);
         }
 
-        return back()->with('success', $result['status'] === 'busy' ? $result['message'] : ($result['message'] === 'An update is waiting.' ? 'An update from the update server is waiting.' : 'Checked in. No updates waiting.'));
+        return redirect()->route('admin.updates.index')->with('success', $result['status'] === 'busy' ? $result['message'] : ($result['message'] === 'An update is waiting.' ? 'An update from the update server is waiting.' : 'Checked in. No updates waiting.'));
     }
 
     /**

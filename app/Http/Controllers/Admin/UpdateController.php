@@ -96,17 +96,17 @@ class UpdateController extends Controller
         try {
             $this->updater->cancel();
         } catch (Throwable $e) {
-            return back()->with('error', $e->getMessage());
+            return redirect()->route('admin.updates.index')->with('error', $e->getMessage());
         }
 
-        return back()->with('success', 'The unfinished update was cancelled.');
+        return redirect()->route('admin.updates.index')->with('success', 'The unfinished update was cancelled.');
     }
 
     public function online(): RedirectResponse
     {
         $this->updater->bringOnline();
 
-        return back()->with('success', 'Your website is back online.');
+        return redirect()->route('admin.updates.index')->with('success', 'Your website is back online.');
     }
 
     public function restore(string $backup): JsonResponse
@@ -161,7 +161,7 @@ class UpdateController extends Controller
 
         $repository = filled($data['repository'] ?? null) ? Updater::cleanRepository($data['repository']) : null;
         if (filled($data['repository'] ?? null) && ! $repository) {
-            return back()->withErrors(['repository' => 'Enter the repository as owner/name, e.g. my-company/catalog.']);
+            return redirect()->route('admin.updates.index')->withErrors(['repository' => 'Enter the repository as owner/name, e.g. my-company/catalog.']);
         }
 
         $settings = BusinessSetting::current();
