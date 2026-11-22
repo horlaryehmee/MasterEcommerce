@@ -30,6 +30,31 @@ class BackgroundFilesTest extends TestCase
             ->assertRedirect('/admin/reviews');
     }
 
+    public function test_downloads_and_error_pages_never_become_the_previous_page(): void
+    {
+        $this->actingAsAdmin();
+        $this->get('/admin/reviews')->assertOk();
+
+        // A CSV download (opens as a file) and a missing page, after the admin page.
+        $this->get('/admin/orders/export')->assertOk()->assertDownload();
+        $this->get('/admin/products/999999/edit')->assertNotFound();
+
+        $this->put('/admin/reviews/settings', ['reviews_enabled' => '1', 'reviews_home_enabled' => '1', 'reviews_auto_publish' => 'manual'])
+            ->assertRedirect('/admin/reviews');
+    }
+
+    public function test_the_browser_tells_this_site_where_a_form_came_from(): void
+    {
+        $this->actingAsAdmin();
+        // Admin and order pages: never shown to other websites, but sent to this one.
+        $this->get('/admin/reviews')->assertHeader('Referrer-Policy', 'same-origin');
+
+        // With a Referer, "back" uses it even if a stray file was fetched in between.
+        $this->get('/sw.js');
+        $this->from('/admin/coupons')->put('/admin/reviews/settings', ['reviews_enabled' => '1', 'reviews_home_enabled' => '1', 'reviews_auto_publish' => 'manual'])
+            ->assertRedirect('/admin/coupons');
+    }
+
     public function test_background_files_do_not_start_a_session(): void
     {
         $response = $this->get('/sw.js')->assertOk();

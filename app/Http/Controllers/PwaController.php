@@ -23,8 +23,10 @@ class PwaController extends Controller
      */
     public const STATELESS = [
         \Illuminate\Session\Middleware\StartSession::class,
+        \App\Http\Middleware\StartSession::class,
         \Illuminate\View\Middleware\ShareErrorsFromSession::class,
         \Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class,
+        \App\Http\Middleware\ValidateCsrfToken::class,
         \Illuminate\Session\Middleware\AuthenticateSession::class,
         \App\Http\Middleware\HandleInertiaRequests::class,
     ];

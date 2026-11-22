@@ -42,7 +42,9 @@ class SecurityHeaders
 
         // Order pages hold personal details: never cache them in shared caches.
         if (\App\Support\Tracking::privatePage($request)) {
-            $response->headers->set('Referrer-Policy', 'no-referrer');
+            // same-origin: other websites never see these addresses (order tokens, admin pages), but
+            // this site does, so "go back" after saving a form returns to the page it came from.
+            $response->headers->set('Referrer-Policy', 'same-origin');
             $response->headers->set('Cache-Control', 'no-store, private');
         }
 

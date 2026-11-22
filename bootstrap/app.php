@@ -37,6 +37,8 @@ return Application::configure(basePath: dirname(__DIR__))
         // CSRF cookie named after this app, so another site's domain-wide "XSRF-TOKEN" can't break it.
         $middleware->web(replace: [
             \Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class => \App\Http\Middleware\ValidateCsrfToken::class,
+            // Only real pages count as "the previous page" (never /sw.js, downloads, JSON…).
+            \Illuminate\Session\Middleware\StartSession::class => \App\Http\Middleware\StartSession::class,
         ]);
         $middleware->web(append: [
             \App\Http\Middleware\SecurityHeaders::class,

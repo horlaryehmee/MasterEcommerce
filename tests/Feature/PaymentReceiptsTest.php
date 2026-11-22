@@ -155,7 +155,7 @@ class PaymentReceiptsTest extends TestCase
         BusinessSetting::current()->update(['ga4_id' => 'G-123456', 'head_code' => '<script>window.customPixel = true;</script>']);
         BusinessSetting::forgetResolved();
         $this->get($this->order->url())->assertOk()->assertDontSee('window.customPixel', false)
-            ->assertDontSee('googletagmanager.com', false)->assertHeader('Referrer-Policy', 'no-referrer')
+            ->assertDontSee('googletagmanager.com', false)->assertHeader('Referrer-Policy', 'same-origin')
             ->assertInertia(fn (Assert $p) => $p->where('tracking', null));
     }
 
