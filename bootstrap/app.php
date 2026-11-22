@@ -42,6 +42,8 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
         $middleware->web(append: [
             \App\Http\Middleware\SecurityHeaders::class,
+            // Coming soon / maintenance page for visitors (Website Settings → Coming soon & maintenance).
+            \App\Http\Middleware\ShowLaunchPage::class,
             \App\Http\Middleware\TemplatePreview::class,
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,

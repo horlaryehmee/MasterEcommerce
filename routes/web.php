@@ -106,6 +106,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
         Route::get('settings', [Admin\SettingsController::class, 'edit'])->name('settings.edit');
         Route::post('settings/email/test', [Admin\SettingsController::class, 'testEmail'])->middleware('throttle:5,1')->name('settings.test-email');
+        Route::post('settings/launch/link', [Admin\SettingsController::class, 'newLaunchLink'])->middleware('throttle:10,1')->name('settings.launch-link');
         Route::put('settings/email', [Admin\SettingsController::class, 'update'])->defaults('section', 'email')->middleware('password.confirm:admin.password.confirm,600')->name('settings.email');
         Route::put('settings/code', [Admin\SettingsController::class, 'update'])->defaults('section', 'code')->middleware('password.confirm:admin.password.confirm,600')->name('settings.code');
         Route::put('settings/{section}', [Admin\SettingsController::class, 'update'])->name('settings.update');

@@ -58,6 +58,11 @@ class BusinessSetting extends Model
         'reviews_enabled' => true,
         'reviews_home_enabled' => true,
         'reviews_auto_publish' => 'manual',
+        'launch_enabled' => false,
+        'launch_mode' => 'coming_soon',
+        'launch_countdown' => true,
+        'launch_auto_open' => true,
+        'launch_show_contact' => true,
         'paystack_mode' => 'test',
         'primary_color' => '#111827',
         'secondary_color' => '#F4F1EC',
@@ -125,6 +130,11 @@ class BusinessSetting extends Model
             'pay_paystack_enabled' => 'boolean',
             'reviews_enabled' => 'boolean',
             'reviews_home_enabled' => 'boolean',
+            'launch_enabled' => 'boolean',
+            'launch_countdown' => 'boolean',
+            'launch_auto_open' => 'boolean',
+            'launch_show_contact' => 'boolean',
+            'launch_at' => 'datetime',
             'mail_port' => 'integer',
         ];
     }

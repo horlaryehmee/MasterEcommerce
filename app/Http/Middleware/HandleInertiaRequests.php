@@ -56,6 +56,8 @@ class HandleInertiaRequests extends Middleware
             // one-off analytics events flashed by the server (add to cart, purchase).
             'tracking' => $isAdmin ? null : fn () => Tracking::config($request) ?: null,
             'analytics' => $isAdmin ? null : fn () => $request->session()->get('analytics'),
+            // Signed-in admin browsing the shop while visitors see the coming soon / maintenance page.
+            'launch' => $isAdmin ? null : fn () => $request->user() && \App\Support\LaunchPage::active() ? ['mode' => BusinessSetting::current()->launch_mode] : null,
             // Built-in visitor statistics on/off for this visitor.
             'stats' => ! $isAdmin && Collector::shouldTrack($request),
             'brand' => fn () => $this->brand(),

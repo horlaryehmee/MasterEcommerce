@@ -1,6 +1,6 @@
 import { Link, router, useForm } from '@inertiajs/react';
 import { useState } from 'react';
-import { ArrowRightLeft, BadgeDollarSign, Building2, ChevronDown, ChevronRight, ChevronUp, Code2, ExternalLink, Mail as MailIcon, Palette, Pencil, Plus, Search as SearchIcon, Share2, ShoppingCart, Target, Trash2, Truck } from 'lucide-react';
+import { ArrowRightLeft, BadgeDollarSign, Building2, ChevronDown, ChevronRight, ChevronUp, Code2, Copy, ExternalLink, Hourglass, Mail as MailIcon, Palette, Pencil, Plus, Search as SearchIcon, Share2, ShoppingCart, Target, Trash2, Truck } from 'lucide-react';
 import { SOCIAL_ICONS, WhatsAppIcon } from '@/Components/Icons';
 import ProductCard from '@/Components/Store/ProductCard';
 import FontPicker, { fontStack } from '@/Components/Admin/FontPicker';
@@ -20,6 +20,7 @@ const TABS = [
     ['social', 'Social media'],
     ['seo', 'SEO'],
     ['tracking', 'Tracking & ads'],
+    ['launch', 'Coming soon & maintenance'],
     ['code', 'Custom code'],
     ['redirects', 'Redirects'],
 ];
@@ -37,6 +38,7 @@ const MENU = [
         ['shop', ShoppingCart, 'bg-amber-500', 'Cart, payments and order emails'],
         ['email', MailIcon, 'bg-blue-500', 'SMTP or PHP mail, sender, test email'],
         ['shipping', Truck, 'bg-orange-500', 'Where you deliver and delivery fees'],
+        ['launch', Hourglass, 'bg-teal-500', 'Hide the shop behind a countdown page'],
     ]],
     ['Marketing', [
         ['seo', SearchIcon, 'bg-indigo-500', 'Google search title, description, image'],
@@ -1189,7 +1191,94 @@ function Redirects({ redirects }) {
     );
 }
 
-export default function SettingsEdit({ tab, tabChosen, settings, paystack, socials, countries, shipTo, shippingZones, hasWhatsapp, titleSeparators, timezones, redirects, appIsProduction, mail, mailers, mailEncryptions, serverMailer, adminEmail, fonts, cardStyles, cardShapes, cardCorners, sampleProduct, currencyPresets, pricePreview, whatsappPreview }) {
+/** Coming soon / maintenance page: on/off, wording, countdown, picture, preview links. */
+function Launch({ s, launch }) {
+    const form = useForm({
+        launch_enabled: !!s.launch_enabled,
+        launch_mode: s.launch_mode || 'coming_soon',
+        launch_heading: s.launch_heading ?? '',
+        launch_message: s.launch_message ?? '',
+        launch_at_local: launch.launch_at_local ?? '',
+        launch_countdown: s.launch_countdown !== false && s.launch_countdown !== 0,
+        launch_auto_open: s.launch_auto_open !== false && s.launch_auto_open !== 0,
+        launch_show_contact: s.launch_show_contact !== false && s.launch_show_contact !== 0,
+        launch_image: null,
+        remove_launch_image: false,
+    });
+    const d = form.data;
+    const [copied, setCopied] = useState(false);
+    const copy = (text) => navigator.clipboard?.writeText(text).then(() => (setCopied(true), setTimeout(() => setCopied(false), 1500)));
+
+    return (
+        <form
+            onSubmit={(e) => {
+                e.preventDefault();
+                submitWithFiles(form, 'launch');
+            }}
+            className="space-y-6"
+        >
+            {launch.active && (
+                <div role="status" className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+                    <strong>Your shop is hidden.</strong> Visitors see the {s.launch_mode === 'maintenance' ? 'maintenance' : 'coming soon'} page. You see the shop because you’re signed in.
+                </div>
+            )}
+            {launch.opened_automatically && (
+                <div role="status" className="rounded-2xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
+                    <strong>Your shop is open.</strong> The countdown finished and the shop opened by itself. You can switch the page off below.
+                </div>
+            )}
+
+            <Card title="Coming soon & maintenance page" description="Hide your shop behind one simple page, for example before launch or while you make changes. Signed-in admins still see the shop.">
+                <div className="space-y-5">
+                    <Toggle label="Show this page to visitors" description="Order links and online payments keep working, so existing customers aren’t affected." checked={d.launch_enabled} onChange={(v) => form.setData('launch_enabled', v)} />
+                    <Select label="Type of page" options={Object.entries(launch.modes).map(([value, label]) => ({ value, label }))} {...bind(form, 'launch_mode')} help={d.launch_mode === 'maintenance' ? 'For short breaks while you work on the shop.' : 'For before your shop opens.'} />
+                    <TextInput label="Heading" maxLength={120} placeholder={launch.default_heading} optional {...bind(form, 'launch_heading')} />
+                    <Textarea label="Message" rows={3} maxLength={1000} placeholder={launch.default_message} optional {...bind(form, 'launch_message')} />
+                    <ImageField label="Background picture" help="Optional. A wide photo of your products or shop (1920 px wide is ideal). Without one, your brand colours are used." aspect="aspect-video" currentUrl={launch.image_url} file={d.launch_image} onFile={(f) => form.setData('launch_image', f)} removed={d.remove_launch_image} onRemove={(v) => form.setData('remove_launch_image', v)} error={form.errors.launch_image} />
+                </div>
+                <SaveBar form={form} />
+            </Card>
+
+            <Card title="Countdown" description={`Times are in your shop’s time zone (${launch.timezone}). Visitors see the countdown in their own time.`}>
+                <div className="space-y-5">
+                    <TextInput label="Opening date and time" type="datetime-local" optional {...bind(form, 'launch_at_local')} error={form.errors.launch_at_local || form.errors.launch_at} help="Leave empty for no countdown." />
+                    <Toggle label="Show the countdown" checked={d.launch_countdown} onChange={(v) => form.setData('launch_countdown', v)} />
+                    <Toggle label="Open the shop automatically when the countdown ends" description="No need to be awake at midnight: at the opening time the shop opens by itself." checked={d.launch_auto_open} onChange={(v) => form.setData('launch_auto_open', v)} />
+                    <Toggle label="Show WhatsApp, phone, email and social links" description="From your business details and social media settings." checked={d.launch_show_contact} onChange={(v) => form.setData('launch_show_contact', v)} />
+                </div>
+                <SaveBar form={form} />
+            </Card>
+
+            <Card title="Preview">
+                <div className="space-y-4 text-sm text-zinc-600">
+                    <a href={launch.page_preview_url} target="_blank" rel="noopener noreferrer" className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-zinc-300 px-4 font-medium text-zinc-800 hover:bg-zinc-50">
+                        See the page as visitors will <ExternalLink size={14} />
+                    </a>
+                    <p className="text-xs text-zinc-500">Shows the saved version. Save first to see your changes.</p>
+                    {launch.preview_url ? (
+                        <div>
+                            <p className="font-medium text-zinc-900">Secret link to see the shop</p>
+                            <p className="mt-0.5 text-xs">Send it to a partner or customer: they can browse the real shop while it’s hidden (for 30 days on their device).</p>
+                            <div className="mt-2 flex items-center gap-2">
+                                <code className="min-w-0 flex-1 truncate rounded-lg bg-zinc-100 px-3 py-2 font-mono text-xs text-zinc-800">{launch.preview_url}</code>
+                                <button type="button" onClick={() => copy(launch.preview_url)} className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-zinc-300 px-3 text-xs font-medium text-zinc-800 hover:bg-zinc-50">
+                                    <Copy size={13} /> {copied ? 'Copied' : 'Copy'}
+                                </button>
+                            </div>
+                            <button type="button" onClick={() => router.post('/admin/settings/launch/link', {}, { preserveScroll: true })} className="mt-2 text-xs font-medium text-zinc-600 underline hover:text-zinc-900">
+                                Make a new link (the old one stops working)
+                            </button>
+                        </div>
+                    ) : (
+                        <p className="text-xs text-zinc-500">A secret link to share the shop appears here once the page is switched on.</p>
+                    )}
+                </div>
+            </Card>
+        </form>
+    );
+}
+
+export default function SettingsEdit({ tab, tabChosen, settings, paystack, socials, countries, shipTo, shippingZones, hasWhatsapp, titleSeparators, timezones, redirects, appIsProduction, mail, mailers, mailEncryptions, serverMailer, adminEmail, fonts, cardStyles, cardShapes, cardCorners, sampleProduct, currencyPresets, pricePreview, whatsappPreview, launch }) {
     const choose = (key) => router.get('/admin/settings', { tab: key }, { preserveScroll: true, preserveState: false, replace: true });
 
     const panels = {
@@ -1203,6 +1292,7 @@ export default function SettingsEdit({ tab, tabChosen, settings, paystack, socia
         social: <Social socials={socials} />,
         seo: <Seo s={settings} separators={titleSeparators} isProduction={appIsProduction} />,
         tracking: <Tracking s={settings} timezones={timezones} />,
+        launch: <Launch s={settings} launch={launch} />,
         code: <CustomCode s={settings} />,
         redirects: <Redirects redirects={redirects} />,
     };

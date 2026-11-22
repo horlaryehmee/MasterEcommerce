@@ -33,7 +33,7 @@ use Throwable;
 
 class SettingsController extends Controller
 {
-    public const SECTIONS = ['business', 'branding', 'currency', 'whatsapp', 'shop', 'email', 'shipping', 'social', 'seo', 'tracking', 'code', 'redirects'];
+    public const SECTIONS = ['business', 'branding', 'currency', 'whatsapp', 'shop', 'email', 'shipping', 'social', 'seo', 'tracking', 'launch', 'code', 'redirects'];
 
     /** Separators offered for page titles ("Product | Store"). */
     public const TITLE_SEPARATORS = ['|', '-', '–', '—', '·', '•', ':'];
@@ -48,6 +48,9 @@ class SettingsController extends Controller
         ],
         'seo' => [
             'og_image' => ['og_image_path', 'banners', 'jpg'],
+        ],
+        'launch' => [
+            'launch_image' => ['launch_image_path', 'banners', 'webp'],
         ],
     ];
 
@@ -135,6 +138,18 @@ class SettingsController extends Controller
             'currencyPresets' => BusinessSetting::CURRENCY_PRESETS,
             'pricePreview' => Money::format(1234567.5, $s),
             'whatsappPreview' => WhatsApp::generalLink($s),
+            'launch' => [
+                'modes' => \App\Support\LaunchPage::MODES,
+                'timezone' => $s->timezone ?: config('app.timezone'),
+                'launch_at_local' => $s->launch_at?->setTimezone($s->timezone ?: config('app.timezone'))->format('Y-m-d\TH:i'),
+                'active' => \App\Support\LaunchPage::active($s),
+                'opened_automatically' => $s->launch_enabled && ! \App\Support\LaunchPage::active($s),
+                'preview_url' => \App\Support\LaunchPage::previewUrl($s),
+                'page_preview_url' => url('/').'?launch_preview=1',
+                'image_url' => \App\Support\Media::url($s->launch_image_path),
+                'default_heading' => \App\Support\LaunchPage::heading($s->replicate()->forceFill(['launch_heading' => null])),
+                'default_message' => \App\Support\LaunchPage::message($s->replicate()->forceFill(['launch_message' => null])),
+            ],
         ]);
     }
 
@@ -178,6 +193,17 @@ class SettingsController extends Controller
                 ...($request->has('stats_enabled') ? ['stats_enabled' => $request->boolean('stats_enabled')] : []),
                 ...collect(['ga4_id', 'gtm_id', 'google_ads_id', 'tiktok_pixel_id'])->mapWithKeys(fn ($f) => [$f => $request->filled($f) ? strtoupper(trim((string) $request->input($f))) : null])->all(),
             ]);
+        }
+
+        if ($section === 'launch') {
+            $request->merge(collect(['launch_enabled', 'launch_countdown', 'launch_auto_open', 'launch_show_contact'])->mapWithKeys(fn ($f) => [$f => $request->boolean($f)])->all());
+            $local = trim((string) $request->input('launch_at_local'));
+            $tz = $settings->timezone ?: config('app.timezone');
+            try {
+                $request->merge(['launch_at' => $local === '' ? null : \Illuminate\Support\Carbon::parse($local, $tz)->utc()]);
+            } catch (\Throwable) {
+                throw ValidationException::withMessages(['launch_at_local' => 'Enter a valid date and time.']);
+            }
         }
 
         if ($section === 'whatsapp') {
@@ -235,8 +261,24 @@ class SettingsController extends Controller
             $data['currency_code'] = strtoupper($data['currency_code']);
         }
 
+        if ($section === 'launch') {
+            unset($data['launch_at_local']);
+            // First time it's switched on: create the secret preview link.
+            if (! empty($data['launch_enabled']) && ! $settings->launch_token) {
+                $data['launch_token'] = \Illuminate\Support\Str::random(32);
+            }
+        }
+
         $settings->update($data);
         array_map(fn ($p) => $this->images->delete($p), array_filter($oldFiles));
+
+        if ($section === 'launch') {
+            \App\Support\StorefrontCache::flush();
+
+            return redirect()->route('admin.settings.edit', ['tab' => 'launch'])->with('success', ! $settings->launch_enabled
+                ? 'Saved. Your shop is open to everyone.'
+                : (\App\Support\LaunchPage::active($settings) ? 'Saved. Visitors now see the '.($settings->launch_mode === 'maintenance' ? 'maintenance' : 'coming soon').' page; you still see the shop.' : 'Saved. The launch time has passed, so the shop is open.'));
+        }
 
         return redirect()->route('admin.settings.edit', ['tab' => $section])->with('success', $this->savedMessage('Settings saved.'));
     }
@@ -577,12 +619,33 @@ If you can read this, your website can send emails: you'll get an email for ever
                 'stats_enabled' => ['boolean'],
                 'timezone' => ['sometimes', 'required', Rule::in(timezone_identifiers_list())],
             ],
+            'launch' => [
+                'launch_enabled' => ['boolean'],
+                'launch_mode' => ['required', Rule::in(array_keys(\App\Support\LaunchPage::MODES))],
+                'launch_heading' => ['nullable', 'string', 'max:120'],
+                'launch_message' => ['nullable', 'string', 'max:1000'],
+                'launch_at_local' => ['nullable', 'string', 'max:30'],
+                'launch_at' => ['nullable', 'date'],
+                'launch_countdown' => ['boolean'],
+                'launch_auto_open' => ['boolean'],
+                'launch_show_contact' => ['boolean'],
+                'launch_image' => $image,
+                'remove_launch_image' => ['nullable', 'boolean'],
+            ],
             'code' => [
                 'head_code' => ['nullable', 'string', 'max:50000'],
                 'body_code' => ['nullable', 'string', 'max:50000'],
                 'footer_code' => ['nullable', 'string', 'max:50000'],
             ],
         };
+    }
+
+    /** A new secret preview link for the coming soon page; the old one stops working. */
+    public function newLaunchLink(): RedirectResponse
+    {
+        BusinessSetting::current()->update(['launch_token' => \Illuminate\Support\Str::random(32)]);
+
+        return redirect()->route('admin.settings.edit', ['tab' => 'launch'])->with('success', 'New preview link created. The old link no longer works.');
     }
 
     /** '<meta name="google-site-verification" content="abc" />' → 'abc'. */

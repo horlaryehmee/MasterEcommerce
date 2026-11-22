@@ -35,6 +35,20 @@ function PreviewBar({ preview }) {
     );
 }
 
+/** Signed-in admin: the shop is hidden from visitors behind the coming soon / maintenance page. */
+function LaunchBar() {
+    const { launch } = usePage().props;
+    if (!launch) return null;
+    return (
+        <div className="bg-amber-400 px-4 py-2 text-center text-[13px] font-medium text-amber-950" role="status">
+            Only you can see the shop: visitors see the {launch.mode === 'maintenance' ? 'maintenance' : 'coming soon'} page.{' '}
+            <a href="/admin/settings?tab=launch" className="font-semibold underline underline-offset-2">
+                Change
+            </a>
+        </div>
+    );
+}
+
 /**
  * `hideBottomNav`: for pages with their own sticky bar on phones (e.g. the product
  * page's enquiry bar), which takes the bottom navigation's place.
@@ -49,6 +63,7 @@ export default function StoreLayout({ children, hideFloatingWhatsApp = false, hi
             <a href="#main" className="sr-only z-50 rounded bg-white px-4 py-2 focus:not-sr-only focus:fixed focus:top-2 focus:left-2">
                 Skip to content
             </a>
+            <LaunchBar />
             <Header />
             <main id="main" className="flex-1">
                 {children}

@@ -333,6 +333,19 @@ export const SECTIONS = [
                 ],
                 tips: ['Products, categories and pages each have their own **Search engine listing** box if you want to set them one by one. Otherwise they are filled in automatically.'],
             },
+            {
+                id: 'coming-soon',
+                title: 'Coming soon or maintenance page',
+                summary: 'Hide the shop behind a countdown page, then open it automatically.',
+                steps: [
+                    { t: 'Open **Settings → Coming soon & maintenance**.' },
+                    { t: 'Choose **Coming soon** (before you open) or **Down for maintenance** (while you make changes). Write a heading and message, or keep the suggested ones. Add a background picture if you like.' },
+                    { t: 'Under **Countdown**, pick the **opening date and time**. Leave **Open the shop automatically** on, and the shop opens by itself at that moment.' },
+                    { t: 'Switch on **Show this page to visitors** and tap **Save changes**. Visitors now see the page; you still see the shop (with a yellow reminder bar at the top).' },
+                    { t: 'Tap **See the page as visitors will** to check it. To let someone browse the real shop before it opens, copy the **secret link** and send it to them.' },
+                ],
+                tips: ['Order links and online payments keep working while the page is on, so existing customers aren’t affected.', 'Search engines are told the shop is only closed for a while, so your Google ranking isn’t harmed.', 'Made a secret link by mistake or shared it too widely? Tap **Make a new link**: the old one stops working.'],
+            },
         ],
     },
     {
