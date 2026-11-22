@@ -1,5 +1,6 @@
 import { Link, usePage } from '@inertiajs/react';
-import { Clock, Mail, MapPin, Phone } from 'lucide-react';
+import { Clock, Download, Mail, MapPin, Phone } from 'lucide-react';
+import { InstallApp } from '@/Components/InstallApp';
 import { SOCIAL_ICONS, WhatsAppIcon } from '@/Components/Icons';
 import useTheme from '@/hooks/useTheme';
 
@@ -144,7 +145,16 @@ export default function Footer() {
             </div>
             <div className={`border-t ${t.rule}`}>
                 <div className={`container-page flex flex-col gap-2 py-6 text-xs sm:flex-row sm:items-center sm:justify-between ${t.small}`}>
-                    <span>{store.copyright}</span>
+                    <span className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                        <span>{store.copyright}</span>
+                        <InstallApp name={brand?.name || 'the app'}>
+                            {(install) => (
+                                <button type="button" onClick={install} className={`inline-flex items-center gap-1.5 font-medium ${t.strong}`}>
+                                    <Download size={13} /> Install our app
+                                </button>
+                            )}
+                        </InstallApp>
+                    </span>
                     {author && (
                         <span>
                             Website by{' '}

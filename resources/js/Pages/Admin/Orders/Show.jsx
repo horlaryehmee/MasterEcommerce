@@ -33,7 +33,9 @@ function StatusPicker({ label, field, value, options, orderId }) {
     );
 }
 
-export default function OrderShow({ order, statuses, paymentStatuses, customerWhatsapp, customer }) {
+const PAYMENT_COLORS = { success: 'bg-emerald-50 text-emerald-700', flagged: 'bg-red-50 text-red-700', failed: 'bg-zinc-100 text-zinc-600', abandoned: 'bg-zinc-100 text-zinc-600', pending: 'bg-amber-50 text-amber-800' };
+
+export default function OrderShow({ order, statuses, paymentStatuses, customerWhatsapp, customer, payments = [], paidAt }) {
     const tel = order.customer_phone.replace(/[^\d+]/g, '');
 
     return (
@@ -61,6 +63,11 @@ export default function OrderShow({ order, statuses, paymentStatuses, customerWh
                 }
             />
 
+            {order.status === 'awaiting_payment' && (
+                <div role="alert" className="mb-5 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+                    <strong>Not paid. Don’t send this order yet.</strong> The customer started paying online but Paystack hasn’t confirmed a payment. It becomes a New order automatically if they pay, and is cancelled after 24 hours if they don’t.
+                </div>
+            )}
             <div className="grid gap-5 pb-16 sm:gap-6 lg:grid-cols-[1fr_360px] lg:pb-0">
                 <div className="space-y-6">
                     <Card title="Update order">
@@ -172,9 +179,34 @@ export default function OrderShow({ order, statuses, paymentStatuses, customerWh
                             <Row label="Status">
                                 <PaymentStatusBadge status={order.payment_status} label={order.payment_status_label} />
                             </Row>
+                            {paidAt && <Row label="Paid on">{paidAt}</Row>}
                         </dl>
+                        {payments.length > 0 && (
+                            <div className="mt-3 border-t border-zinc-100 pt-3">
+                                <p className="text-xs font-semibold tracking-wide text-zinc-500 uppercase">Online payments</p>
+                                <ul className="mt-2 space-y-2">
+                                    {payments.map((p) => (
+                                        <li key={p.id} className="rounded-lg border border-zinc-100 p-2.5 text-xs">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className={`rounded-full px-2 py-0.5 font-semibold ${PAYMENT_COLORS[p.status] ?? 'bg-zinc-100 text-zinc-600'}`}>{p.status_label}</span>
+                                                <span className="font-semibold text-zinc-900">{p.amount}</span>
+                                            </div>
+                                            <p className="mt-1.5 font-mono break-all text-zinc-500">{p.reference}</p>
+                                            <p className="mt-1 text-zinc-500">
+                                                {[p.at, p.channel, p.mode === 'test' ? 'TEST MODE' : null].filter(Boolean).join(' · ')}
+                                            </p>
+                                            {p.amount_paid && <p className="mt-1 font-medium text-red-700">Paystack reported {p.amount_paid}</p>}
+                                            {p.message && <p className="mt-1 text-zinc-600">{p.message}</p>}
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
                         <a href={order.public_url} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-zinc-600 hover:text-zinc-900">
                             Customer's order page <ExternalLink size={14} />
+                        </a>
+                        <a href={`/admin/orders/${order.id}/email/placed`} target="_blank" rel="noopener noreferrer" className="mt-2 flex items-center gap-1.5 text-sm font-medium text-zinc-600 hover:text-zinc-900">
+                            Preview order email <ExternalLink size={14} />
                         </a>
                     </Card>
                 </div>

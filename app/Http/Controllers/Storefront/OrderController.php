@@ -16,6 +16,13 @@ class OrderController extends StorefrontController
         $order = Order::query()->where('token', $token)->with('items')->firstOrFail();
         $s = BusinessSetting::current();
 
+        // Still confirming (bank transfer, USSD…): ask Paystack again, at most every 10 seconds per payment.
+        $latest = $order->payment_method === 'paystack' && $order->payment_status !== 'paid' ? $order->payments()->first() : null;
+        if ($latest?->status === 'pending' && \Illuminate\Support\Facades\Cache::add('paystack.recheck.'.$latest->id, 1, 10)) {
+            app(\App\Services\Paystack::class)->verify($latest);
+            $order->refresh();
+        }
+
         return $this->page('Storefront/OrderConfirmation', [
             'order' => $order->toDetail(),
             'whatsappUrl' => WhatsApp::orderLink($order, $s),
@@ -25,6 +32,9 @@ class OrderController extends StorefrontController
                 'account_name' => $s->bank_account_name,
                 'account_number' => $s->bank_account_number,
             ] : null,
+            // Unpaid Paystack order: "Pay now" starts a fresh, server-verified payment.
+            'payUrl' => $order->awaitsOnlinePayment() && app(\App\Services\Paystack::class)->ready($s) ? route('orders.pay', $order->token) : null,
+            'paymentState' => $order->onlinePaymentState(),
             'justPlaced' => in_array($token, (array) session('orders', []), true) && $order->created_at?->gt(now()->subHour()),
         ], Seo::make()->title('Order #'.$order->number)->noindex());
     }

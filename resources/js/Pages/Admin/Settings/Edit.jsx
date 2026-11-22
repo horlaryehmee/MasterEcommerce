@@ -394,12 +394,18 @@ function WhatsApp({ s, whatsappPreview }) {
     );
 }
 
-function Shop({ s, hasWhatsapp, mail }) {
+function Shop({ s, hasWhatsapp, mail, paystack }) {
     const form = useForm({
         shop_enabled: s.shop_enabled,
         pay_whatsapp_enabled: s.pay_whatsapp_enabled,
         pay_on_delivery_enabled: s.pay_on_delivery_enabled,
         pay_bank_transfer_enabled: s.pay_bank_transfer_enabled,
+        pay_paystack_enabled: s.pay_paystack_enabled,
+        paystack_mode: paystack.mode,
+        paystack_test_secret_key: '',
+        paystack_live_secret_key: '',
+        paystack_test_public_key: paystack.keys.test.public ?? '',
+        paystack_live_public_key: paystack.keys.live.public ?? '',
         bank_name: s.bank_name ?? '',
         bank_account_name: s.bank_account_name ?? '',
         bank_account_number: s.bank_account_number ?? '',
@@ -415,7 +421,7 @@ function Shop({ s, hasWhatsapp, mail }) {
         <form
             onSubmit={(e) => {
                 e.preventDefault();
-                form.put('/admin/settings/shop', { preserveScroll: true });
+                form.put('/admin/settings/shop', { preserveScroll: true, onSuccess: () => form.setData((data) => ({ ...data, paystack_test_secret_key: '', paystack_live_secret_key: '' })) });
             }}
             className="space-y-6"
         >
@@ -465,6 +471,12 @@ function Shop({ s, hasWhatsapp, mail }) {
                             <TextInput label="Account number" maxLength={40} inputMode="numeric" {...bind(form, 'bank_account_number')} />
                         </div>
                     )}
+                    <Toggle
+                        label="Pay online with Paystack"
+                        description="Customers pay by card, bank transfer or USSD on Paystack’s secure page. Orders are marked Paid automatically, only after this website has verified the payment with Paystack."
+                        {...toggle('pay_paystack_enabled')}
+                    />
+                    {d.pay_paystack_enabled && <PaystackKeys form={form} paystack={paystack} />}
                 </div>
             </Card>
 
@@ -472,6 +484,141 @@ function Shop({ s, hasWhatsapp, mail }) {
                 <Button loading={form.processing}>Save shop settings</Button>
             </FormActions>
         </form>
+    );
+}
+
+function CopyField({ label, value, help }) {
+    const [copied, setCopied] = useState(false);
+    return (
+        <div>
+            <span className="mb-1.5 block text-sm font-medium text-zinc-800">{label}</span>
+            <div className="flex gap-2">
+                <input readOnly value={value} className="input min-w-0 flex-1 font-mono text-xs" onFocus={(e) => e.target.select()} />
+                <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() =>
+                        navigator.clipboard?.writeText(value).then(() => {
+                            setCopied(true);
+                            setTimeout(() => setCopied(false), 1500);
+                        })
+                    }
+                >
+                    {copied ? 'Copied' : 'Copy'}
+                </Button>
+            </div>
+            {help && <p className="mt-1.5 text-xs text-zinc-500">{help}</p>}
+        </div>
+    );
+}
+
+/** The secret and public key for one mode. The secret key is write-only: only a hint of the saved one is shown. */
+function PaystackModeKeys({ form, paystack, mode }) {
+    const saved = paystack.keys[mode];
+    const live = mode === 'live';
+    const Name = live ? 'Live' : 'Test';
+    const envNote = (hint) => (
+        <p className="text-sm text-zinc-600">
+            Set in the server’s <code>.env</code> file{hint ? ` (${hint})` : ''}. It can’t be viewed or changed here.
+        </p>
+    );
+
+    return (
+        <div className={`space-y-4 rounded-xl border-2 bg-white p-4 ${live ? 'border-emerald-200' : 'border-amber-200'}`}>
+            <p className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
+                <span className={`h-2.5 w-2.5 rounded-full ${live ? 'bg-emerald-600' : 'bg-amber-500'}`} />
+                {Name} keys
+            </p>
+            <div className="grid gap-4 sm:grid-cols-2">
+                {saved.from_env ? (
+                    <div>
+                        <span className="mb-1.5 block text-sm font-medium text-zinc-800">{Name} secret key</span>
+                        {envNote(saved.hint)}
+                    </div>
+                ) : (
+                    <TextInput
+                        label={`${Name} secret key`}
+                        type="password"
+                        placeholder={saved.hint ? `Saved: ${saved.hint}. Paste a new key to replace it` : `sk_${mode}_…`}
+                        autoComplete="new-password"
+                        spellCheck={false}
+                        maxLength={200}
+                        help={saved.hint ? `Saved and checked with Paystack (${saved.hint}). Never shown again.` : `Starts with sk_${mode}_. Checked with Paystack when you save. Keep it private.`}
+                        {...bind(form, `paystack_${mode}_secret_key`)}
+                    />
+                )}
+                {saved.public_from_env ? (
+                    <div>
+                        <span className="mb-1.5 block text-sm font-medium text-zinc-800">{Name} public key</span>
+                        {envNote(saved.public)}
+                    </div>
+                ) : (
+                    <TextInput
+                        label={`${Name} public key`}
+                        placeholder={`pk_${mode}_…`}
+                        autoComplete="off"
+                        spellCheck={false}
+                        maxLength={200}
+                        help={`Starts with pk_${mode}_. Safe to share: it’s the key used on payment pages.`}
+                        {...bind(form, `paystack_${mode}_public_key`)}
+                    />
+                )}
+            </div>
+        </div>
+    );
+}
+
+/** Paystack: test/live switch, a secret key for each mode, and the webhook address. */
+function PaystackKeys({ form, paystack }) {
+    const mode = form.data.paystack_mode;
+    const live = mode === 'live';
+    const options = [
+        ['test', 'Test mode', 'No real money. Use Paystack’s test cards.'],
+        ['live', 'Live mode', 'Customers are charged real money.'],
+    ];
+    return (
+        <div className="space-y-4 rounded-xl bg-zinc-50 p-4">
+            {!paystack.currency_supported && (
+                <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">Paystack can’t charge in {paystack.currency}. Change your currency (Currency tab) to NGN, GHS, ZAR, KES, USD, XOF, EGP or RWF.</p>
+            )}
+
+            <div role="radiogroup" aria-label="Paystack mode" className="grid grid-cols-2 gap-2">
+                {options.map(([value, title, text]) => {
+                    const on = mode === value;
+                    return (
+                        <button
+                            key={value}
+                            type="button"
+                            role="radio"
+                            aria-checked={on}
+                            disabled={paystack.mode_from_env}
+                            onClick={() => form.setData('paystack_mode', value)}
+                            className={`rounded-xl border-2 p-3 text-left transition disabled:cursor-not-allowed disabled:opacity-60 ${on ? (value === 'live' ? 'border-emerald-600 bg-emerald-50' : 'border-amber-500 bg-amber-50') : 'border-zinc-200 bg-white hover:border-zinc-300'}`}
+                        >
+                            <span className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
+                                <span className={`h-2.5 w-2.5 rounded-full ${on ? (value === 'live' ? 'bg-emerald-600' : 'bg-amber-500') : 'bg-zinc-300'}`} />
+                                {title}
+                            </span>
+                            <span className="mt-0.5 block text-xs text-zinc-600">{text}</span>
+                        </button>
+                    );
+                })}
+            </div>
+            {paystack.mode_from_env && <p className="text-xs text-zinc-500">The mode is set in the server’s .env file (PAYSTACK_MODE).</p>}
+            {form.errors.paystack_mode && <p className="text-xs font-medium text-red-600">{form.errors.paystack_mode}</p>}
+
+            <p className={`rounded-lg px-3 py-2 text-sm ${live ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-100 text-amber-900'}`}>
+                {live
+                    ? 'Live mode: payments are real. Make sure the webhook below is also added in Paystack’s Live Mode settings.'
+                    : 'Test mode: nothing is really charged, and a warning shows on every admin page. Switch to Live mode when you’re ready to take real payments.'}
+            </p>
+
+            {/* Only the selected mode's keys are shown; the other mode's keys stay saved. */}
+            <PaystackModeKeys key={mode} form={form} paystack={paystack} mode={mode} />
+
+            <CopyField label="Webhook URL" value={paystack.webhook_url} help="In Paystack → Settings → API Keys & Webhooks, paste this as the Webhook URL, in both Test Mode and Live Mode. Payments are then confirmed even if the customer closes the page." />
+            <p className="text-xs text-zinc-500">Copy your keys from Paystack → Settings → API Keys & Webhooks. Paystack shows test and live keys separately: use the Test Mode / Live Mode switch at the top of its dashboard.</p>
+        </div>
     );
 }
 
@@ -1012,7 +1159,7 @@ function Redirects({ redirects }) {
     );
 }
 
-export default function SettingsEdit({ tab, tabChosen, settings, socials, countries, shipTo, shippingZones, hasWhatsapp, titleSeparators, timezones, redirects, appIsProduction, mail, mailers, mailEncryptions, serverMailer, adminEmail, fonts, cardStyles, sampleProduct, currencyPresets, pricePreview, whatsappPreview }) {
+export default function SettingsEdit({ tab, tabChosen, settings, paystack, socials, countries, shipTo, shippingZones, hasWhatsapp, titleSeparators, timezones, redirects, appIsProduction, mail, mailers, mailEncryptions, serverMailer, adminEmail, fonts, cardStyles, sampleProduct, currencyPresets, pricePreview, whatsappPreview }) {
     const choose = (key) => router.get('/admin/settings', { tab: key }, { preserveScroll: true, preserveState: false, replace: true });
 
     const panels = {
@@ -1020,7 +1167,7 @@ export default function SettingsEdit({ tab, tabChosen, settings, socials, countr
         branding: <Branding s={settings} fonts={fonts} cardStyles={cardStyles} sampleProduct={sampleProduct} />,
         currency: <Currency s={settings} presets={currencyPresets} pricePreview={pricePreview} />,
         whatsapp: <WhatsApp s={settings} whatsappPreview={whatsappPreview} />,
-        shop: <Shop s={settings} hasWhatsapp={hasWhatsapp} mail={mail} />,
+        shop: <Shop s={settings} hasWhatsapp={hasWhatsapp} mail={mail} paystack={paystack} />,
         email: <Email s={settings} mail={mail} mailers={mailers} encryptions={mailEncryptions} serverMailer={serverMailer} adminEmail={adminEmail} />,
         shipping: <Shipping s={settings} countries={countries} shipTo={shipTo} zones={shippingZones} />,
         social: <Social socials={socials} />,

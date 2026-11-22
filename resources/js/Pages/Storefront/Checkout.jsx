@@ -1,5 +1,5 @@
 import { Link, useForm } from '@inertiajs/react';
-import { Banknote, Check, ChevronDown, Info, Landmark, Loader2, Lock, Package, Store, Truck } from 'lucide-react';
+import { Banknote, Check, CreditCard, ChevronDown, Info, Landmark, Loader2, Lock, Package, Store, Truck } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 import { WhatsAppIcon } from '@/Components/Icons';
 import Breadcrumbs from '@/Components/Store/Breadcrumbs';
@@ -12,6 +12,7 @@ const PAYMENT_INFO = {
     whatsapp: { icon: WhatsAppIcon, text: 'Send your order to us on WhatsApp. We confirm it and agree payment with you there.' },
     delivery: { icon: Banknote, text: 'Pay with cash or bank transfer when your order arrives.' },
     bank_transfer: { icon: Landmark, text: 'Our account details are shown after you place the order.' },
+    paystack: { icon: CreditCard, text: 'Card, bank transfer or USSD on Paystack’s secure page. Your card details never reach this website.' },
 };
 
 function Field({ label, error, optional, children, htmlFor }) {
@@ -197,7 +198,7 @@ export default function Checkout({ items, subtotal, discount = 0, coupon, coupon
                             <Input label="Full name" autoComplete="name" required maxLength={120} value={d.customer_name} onChange={(e) => set('customer_name', e.target.value)} error={err.customer_name} />
                             <div className="grid gap-4 sm:grid-cols-2">
                                 <Input label="Phone number" type="tel" autoComplete="tel" inputMode="tel" required maxLength={40} placeholder="0801 234 5678" value={d.customer_phone} onChange={(e) => set('customer_phone', e.target.value)} error={err.customer_phone} />
-                                <Input label="Email" type="email" autoComplete="email" optional maxLength={160} placeholder="For your order confirmation" value={d.customer_email} onChange={(e) => set('customer_email', e.target.value)} error={err.customer_email} />
+                                <Input label="Email" type="email" autoComplete="email" optional={d.payment_method !== 'paystack'} maxLength={160} placeholder={d.payment_method === 'paystack' ? 'Your payment receipt is sent here' : 'For your order confirmation'} value={d.customer_email} onChange={(e) => set('customer_email', e.target.value)} error={err.customer_email} />
                             </div>
                             <div className="rounded-2xl bg-stone-50 p-4">
                                 <label className="flex cursor-pointer items-center gap-3 text-sm text-stone-800">
@@ -381,9 +382,11 @@ export default function Checkout({ items, subtotal, discount = 0, coupon, coupon
 
                             <button type="submit" disabled={form.processing || (shippingConfigured && (loading || !rate))} className="btn-primary mt-5 h-13 w-full text-base">
                                 {form.processing ? <Loader2 size={18} className="animate-spin" /> : <Lock size={16} />}
-                                Place order · {fmt(total)}
+                                {d.payment_method === 'paystack' ? 'Continue to secure payment' : 'Place order'} · {fmt(total)}
                             </button>
-                            <p className="mt-3 text-center text-xs text-stone-500">No card details needed. You can review your order on the next page.</p>
+                            <p className="mt-3 text-center text-xs text-stone-500">
+                                {d.payment_method === 'paystack' ? 'You’ll pay on Paystack’s secure page. Your card details never reach this website.' : 'No card details needed. You can review your order on the next page.'}
+                            </p>
                         </div>
                     </aside>
                 </form>

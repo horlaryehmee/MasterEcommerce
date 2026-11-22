@@ -11,6 +11,7 @@ use App\Models\Product;
 use App\Models\SocialLink;
 use App\Services\ImageStorage;
 use App\Services\Shipping;
+use App\Services\Paystack;
 use App\Support\Fonts;
 use App\Support\MailSettings;
 use App\Support\Media;
@@ -63,7 +64,7 @@ class SettingsController extends Controller
             'tabChosen' => in_array($request->query('tab'), self::SECTIONS, true),
             'settings' => [
                 // Secrets (encrypted tokens, the SMTP password) never go to the browser.
-                ...collect($s->getAttributes())->except(['id', 'created_at', 'updated_at', 'update_token', 'mail_password'])->all(),
+                ...collect($s->getAttributes())->except(['id', 'created_at', 'updated_at', 'update_token', 'mail_password', 'paystack_test_secret_key', 'paystack_live_secret_key', 'vapid_private_key'])->all(),
                 'mail_mailer' => $s->mail_mailer ?: 'server',
                 'has_mail_password' => filled($s->getAttributes()['mail_password'] ?? null),
                 'show_floating_whatsapp' => $s->show_floating_whatsapp,
@@ -72,6 +73,7 @@ class SettingsController extends Controller
                 'pay_whatsapp_enabled' => $s->pay_whatsapp_enabled,
                 'pay_on_delivery_enabled' => $s->pay_on_delivery_enabled,
                 'pay_bank_transfer_enabled' => $s->pay_bank_transfer_enabled,
+                'pay_paystack_enabled' => $s->pay_paystack_enabled,
                 'email_owner_new_order' => $s->email_owner_new_order,
                 'email_customer_new_order' => $s->email_customer_new_order,
                 'email_customer_updates' => $s->email_customer_updates,
@@ -103,6 +105,7 @@ class SettingsController extends Controller
                 'hits' => $r->hits,
                 'last_hit' => $r->last_hit_at?->diffForHumans(),
             ]),
+            'paystack' => $this->paystackStatus($s),
             'appIsProduction' => app()->isProduction(),
             'mail' => MailSettings::status($s),
             'mailers' => MailSettings::MAILERS,
@@ -239,7 +242,7 @@ class SettingsController extends Controller
     /** Online ordering switch, payment options and order emails. */
     protected function updateShop(Request $request, BusinessSetting $settings): RedirectResponse
     {
-        $flags = ['shop_enabled', 'pay_whatsapp_enabled', 'pay_on_delivery_enabled', 'pay_bank_transfer_enabled', 'email_owner_new_order', 'email_customer_new_order', 'email_customer_updates'];
+        $flags = ['shop_enabled', 'pay_whatsapp_enabled', 'pay_on_delivery_enabled', 'pay_bank_transfer_enabled', 'pay_paystack_enabled', 'email_owner_new_order', 'email_customer_new_order', 'email_customer_updates'];
         $request->merge(collect($flags)->mapWithKeys(fn ($f) => [$f => $request->boolean($f)])->all());
 
         $data = $request->validate([
@@ -248,9 +251,17 @@ class SettingsController extends Controller
             'bank_account_name' => ['nullable', 'string', 'max:120', 'required_if:pay_bank_transfer_enabled,true'],
             'bank_account_number' => ['nullable', 'string', 'max:40', 'required_if:pay_bank_transfer_enabled,true'],
             'order_notification_email' => ['nullable', 'email', 'max:160'],
+            'paystack_mode' => ['nullable', Rule::in(array_keys(Paystack::MODES))],
+            // Blank = keep the saved key. Only ever written, never read back to the browser.
+            'paystack_test_secret_key' => ['nullable', 'string', 'max:200'],
+            'paystack_live_secret_key' => ['nullable', 'string', 'max:200'],
+            'paystack_test_public_key' => ['nullable', 'string', 'max:200'],
+            'paystack_live_public_key' => ['nullable', 'string', 'max:200'],
         ], ['*.required_if' => 'Required when this option is switched on.']);
 
-        $methods = $data['pay_whatsapp_enabled'] || $data['pay_on_delivery_enabled'] || $data['pay_bank_transfer_enabled'];
+        $data = $this->validatePaystack($data, $settings);
+
+        $methods = $data['pay_whatsapp_enabled'] || $data['pay_on_delivery_enabled'] || $data['pay_bank_transfer_enabled'] || $data['pay_paystack_enabled'];
         if ($data['shop_enabled'] && ! $methods) {
             throw ValidationException::withMessages(['pay_on_delivery_enabled' => 'Switch on at least one payment option.']);
         }
@@ -405,6 +416,93 @@ If you can read this, your website can send emails: you'll get an email for ever
         });
 
         return redirect()->route('admin.settings.edit', ['tab' => 'social'])->with('success', 'Social links saved.');
+    }
+
+    /**
+     * Checks new Paystack keys (right kind, right mode, accepted by Paystack)
+     * and that the chosen mode has a key. Returns the data to save.
+     */
+    protected function validatePaystack(array $data, BusinessSetting $settings): array
+    {
+        $paystack = app(Paystack::class);
+        $data['paystack_mode'] = $paystack->modeFromEnv() ? $settings->paystack_mode : ($data['paystack_mode'] ?? $settings->paystack_mode ?? 'test');
+        $errors = [];
+
+        foreach (array_keys(Paystack::MODES) as $mode) {
+            $field = "paystack_{$mode}_secret_key";
+            $key = trim((string) ($data[$field] ?? ''));
+            if ($key === '' || $paystack->keyFromEnv($mode)) {
+                unset($data[$field]);
+
+                continue;
+            }
+            $problem = Paystack::keyProblem($key, $mode) ?? $paystack->checkKey($key);
+            if ($problem) {
+                $errors[$field] = $problem;
+            }
+            $data[$field] = $key;
+        }
+
+        // Public keys: shown in the form, so a blank field clears the saved key.
+        foreach (array_keys(Paystack::MODES) as $mode) {
+            $field = "paystack_{$mode}_public_key";
+            if (! array_key_exists($field, $data) || $paystack->publicKeyFromEnv($mode)) {
+                unset($data[$field]);
+
+                continue;
+            }
+            $key = trim((string) $data[$field]);
+            $data[$field] = $key === '' ? null : $key;
+            if ($key !== '' && ($problem = Paystack::publicKeyProblem($key, $mode))) {
+                $errors[$field] = $problem;
+            }
+        }
+
+        if ($data['pay_paystack_enabled']) {
+            $mode = $paystack->modeFromEnv() ? $paystack->mode($settings) : $data['paystack_mode'];
+            $hasKey = $paystack->keyFromEnv($mode) || filled($data["paystack_{$mode}_secret_key"] ?? null) || $paystack->secretKey($settings, $mode);
+            if (! $hasKey && ! isset($errors["paystack_{$mode}_secret_key"])) {
+                $errors["paystack_{$mode}_secret_key"] = $mode === 'live'
+                    ? 'Add your live secret key before switching to live mode.'
+                    : 'Add your test secret key, or switch to live mode.';
+            }
+            $hasPublic = $paystack->publicKeyFromEnv($mode) || (array_key_exists("paystack_{$mode}_public_key", $data) ? filled($data["paystack_{$mode}_public_key"]) : $paystack->publicKey($settings, $mode));
+            if (! $hasPublic && ! isset($errors["paystack_{$mode}_public_key"])) {
+                $errors["paystack_{$mode}_public_key"] = 'Add your '.$mode.' public key (it starts with pk_'.$mode.'_).';
+            }
+            if (! in_array(strtoupper((string) $settings->currency_code), Paystack::CURRENCIES, true)) {
+                $errors['pay_paystack_enabled'] = 'Paystack can’t charge in '.$settings->currency_code.'. Supported: '.implode(', ', Paystack::CURRENCIES).'.';
+            }
+        }
+
+        if ($errors) {
+            throw ValidationException::withMessages($errors);
+        }
+
+        return $data;
+    }
+
+    protected function paystackStatus(BusinessSetting $s): array
+    {
+        $paystack = app(Paystack::class);
+        $hint = fn (?string $key) => $key ? substr($key, 0, 8).'…'.substr($key, -4) : null;
+
+        return [
+            'mode' => $paystack->mode($s),
+            'mode_from_env' => $paystack->modeFromEnv(),
+            // Only a hint of each saved secret key, e.g. "sk_live_…a1b2".
+            'keys' => collect(Paystack::MODES)->map(fn ($label, $mode) => [
+                'hint' => $hint($paystack->secretKey($s, $mode)),
+                'from_env' => $paystack->keyFromEnv($mode),
+                // Public keys are meant to be public, so the full key is shown.
+                'public' => $paystack->publicKeyFromEnv($mode) ? $paystack->publicKey($s, $mode) : $s->{"paystack_{$mode}_public_key"},
+                'public_from_env' => $paystack->publicKeyFromEnv($mode),
+            ]),
+            'ready' => $paystack->ready($s),
+            'currency_supported' => in_array(strtoupper((string) $s->currency_code), Paystack::CURRENCIES, true),
+            'currency' => $s->currency_code,
+            'webhook_url' => route('payments.paystack.webhook'),
+        ];
     }
 
     protected function rules(string $section): array

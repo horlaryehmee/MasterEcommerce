@@ -76,6 +76,8 @@ class HandleInertiaRequests extends Middleware
                 // From the last cached check only; never contacts GitHub here.
                 'update_available' => (bool) (app(Updater::class)->cachedStatus()['available'] ?? false),
                 'version' => app(Updater::class)->currentVersion(),
+                // Shown on every admin page until Paystack is switched to live keys.
+                'paystack_test_mode' => app(\App\Services\Paystack::class)->inTestMode(),
             ] : null,
         ];
     }

@@ -1,5 +1,6 @@
 import { Link, useForm } from '@inertiajs/react';
-import { ExternalLink, FolderTree, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Eye, EyeOff, ExternalLink, FolderTree, Home, Pencil, Plus, Trash2 } from 'lucide-react';
+import { BulkBar, BulkDialog, SelectAll, SelectRow, plural, useBulkAction, useSelection } from '@/Components/Admin/Bulk';
 import { useState } from 'react';
 import { FilterSelect, ListToolbar, activeFilters, useList } from '@/Components/Admin/ListToolbar';
 import { ActionMenu, AdminEmpty, AdminPagination, Badge, Button, Modal, PageHeader } from '@/Components/Admin/ui';
@@ -79,6 +80,43 @@ export default function CategoriesIndex({ categories, filters, visibilities, sor
     const active = activeFilters(filters, { visibility: visibilities });
     const filtered = filters.search || active.length > 0;
 
+    const sel = useSelection(categories.data);
+    const bulk = useBulkAction('/admin/categories/bulk', sel);
+    const [dialog, setDialog] = useState(null);
+    const n = sel.count === 1 ? '1 category' : `${sel.count} categories`;
+    const ask = (d) => {
+        bulk.setErrors({});
+        setDialog(d);
+    };
+    const askDelete = () => {
+        const products = sel.rows.reduce((t, c) => t + c.products_count, 0);
+        ask({
+            action: 'delete',
+            title: `Delete ${n}?`,
+            danger: true,
+            confirmLabel: `Delete ${n}`,
+            message: products
+                ? `${n} will be permanently deleted. They contain ${plural(products, 'product')}: choose what happens to them (they stay on the website).`
+                : `${n} will be permanently deleted. This cannot be undone.`,
+            choose: products
+                ? {
+                      label: 'Products in these categories',
+                      initial: 'uncategorize',
+                      options: [['uncategorize', 'Keep them without a category'], ...allCategories.filter((c) => !sel.has(c.id)).map((c) => [String(c.id), `Move them to “${c.name}”`])],
+                  }
+                : null,
+        });
+    };
+    const bulkActions = [
+        { label: 'Show', icon: Eye, onClick: () => bulk.run('show') },
+        { label: 'Hide', icon: EyeOff, onClick: () => bulk.run('hide') },
+        { label: 'Delete', icon: Trash2, danger: true, onClick: askDelete },
+    ];
+    const bulkMore = [
+        { label: 'Show on homepage', icon: Home, onClick: () => bulk.run('feature') },
+        { label: 'Remove from homepage', icon: Home, onClick: () => bulk.run('unfeature') },
+    ];
+
     return (
         <AdminLayout title="Categories">
             <PageHeader
@@ -112,9 +150,14 @@ export default function CategoriesIndex({ categories, filters, visibilities, sor
                     />
                 ) : (
                     <>
+                    <div className="flex items-center gap-3 border-b border-zinc-100 px-4 py-2.5">
+                        <SelectAll selection={sel} />
+                        <span className="text-xs font-medium text-zinc-500">{sel.count ? `${sel.count} selected` : 'Select all'}</span>
+                    </div>
                     <ul className="divide-y divide-zinc-100">
                         {categories.data.map((c) => (
-                            <li key={c.id} className="relative flex items-center gap-3.5 py-3 pr-2 pl-3.5 transition active:bg-zinc-50 sm:gap-4 sm:p-4 sm:active:bg-transparent">
+                            <li key={c.id} className={`relative flex items-center gap-3.5 py-3 pr-2 pl-4 transition active:bg-zinc-50 sm:gap-4 sm:p-4 sm:active:bg-transparent ${sel.has(c.id) ? 'bg-zinc-50' : ''}`}>
+                                <SelectRow selection={sel} id={c.id} label={`Select ${c.name}`} />
                                 <span className="h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-zinc-100 sm:h-14 sm:w-14">{c.image && <img src={c.image} alt="" className="h-full w-full object-cover" loading="lazy" />}</span>
                                 <div className="min-w-0 flex-1">
                                     {/* On phones the whole row opens the category (the link covers it). */}
@@ -155,10 +198,20 @@ export default function CategoriesIndex({ categories, filters, visibilities, sor
                             </li>
                         ))}
                     </ul>
+                    <BulkBar selection={sel} noun="category" actions={bulkActions} more={bulkMore} exportUrl="/admin/categories/export" processing={bulk.processing} />
                     <AdminPagination paginator={categories} list={list} />
                     </>
                 )}
             </div>
+
+            <BulkDialog
+                open={!!dialog}
+                onClose={() => setDialog(null)}
+                onConfirm={(value) => bulk.run(dialog.action, value, { onSuccess: () => setDialog(null) })}
+                processing={bulk.processing}
+                error={bulk.errors.value || bulk.errors.ids}
+                {...dialog}
+            />
 
             <DeleteCategoryModal key={deleting?.id} category={deleting} categories={allCategories} onClose={() => setDeleting(null)} />
         </AdminLayout>

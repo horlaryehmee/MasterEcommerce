@@ -1,5 +1,6 @@
 import { Link, router } from '@inertiajs/react';
-import { Copy, Pencil, Plus, Power, TicketPercent, Trash2 } from 'lucide-react';
+import { Copy, Pencil, Plus, Power, PowerOff, TicketPercent, Trash2 } from 'lucide-react';
+import { BulkBar, BulkDialog, SelectAll, SelectRow, plural, useBulkAction, useSelection } from '@/Components/Admin/Bulk';
 import { useState } from 'react';
 import { FilterSelect, ListToolbar, activeFilters, useList } from '@/Components/Admin/ListToolbar';
 import { CouponStatusBadge } from '@/Components/Admin/OrderBadges';
@@ -28,6 +29,21 @@ export default function CouponsIndex({ coupons, counts, statuses, types, sorts, 
     const total = Object.values(counts).reduce((a, b) => a + Number(b), 0);
     const filtered = filters.search || filters.status || active.length > 0;
     const tabs = [['', 'All', total], ...Object.entries(statuses).map(([k, l]) => [k, l, counts[k] ?? 0])];
+
+    const sel = useSelection(coupons.data);
+    const bulk = useBulkAction('/admin/coupons/bulk', sel);
+    const [dialog, setDialog] = useState(null);
+    const n = plural(sel.count, 'coupon');
+    const bulkActions = [
+        { label: 'Switch on', icon: Power, onClick: () => bulk.run('activate') },
+        { label: 'Switch off', icon: PowerOff, onClick: () => bulk.run('deactivate') },
+        {
+            label: 'Delete',
+            icon: Trash2,
+            danger: true,
+            onClick: () => setDialog({ action: 'delete', title: `Delete ${n}?`, danger: true, confirmLabel: `Delete ${n}`, message: `${n} will stop working and be permanently deleted. Orders that used them keep their discount. To pause them instead, switch them off.` }),
+        },
+    ];
 
     const toggle = (c) => router.patch(`/admin/coupons/${c.id}/toggle`, {}, { preserveScroll: true });
     const copy = (c) => {
@@ -81,9 +97,14 @@ export default function CouponsIndex({ coupons, counts, statuses, types, sorts, 
                     />
                 ) : (
                     <>
+                    <div className="flex items-center gap-3 border-b border-zinc-100 px-4 py-2.5">
+                        <SelectAll selection={sel} />
+                        <span className="text-xs font-medium text-zinc-500">{sel.count ? `${sel.count} selected` : 'Select all'}</span>
+                    </div>
                     <ul className="divide-y divide-zinc-100">
                         {coupons.data.map((c) => (
-                            <li key={c.id} className="relative flex items-center gap-3.5 py-3.5 pr-2 pl-4 transition active:bg-zinc-50 sm:gap-4 sm:p-4 sm:active:bg-transparent">
+                            <li key={c.id} className={`relative flex items-center gap-3.5 py-3.5 pr-2 pl-4 transition active:bg-zinc-50 sm:gap-4 sm:p-4 sm:active:bg-transparent ${sel.has(c.id) ? 'bg-zinc-50' : ''}`}>
+                                <SelectRow selection={sel} id={c.id} label={`Select ${c.code}`} />
                                 <span className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-zinc-100 text-zinc-600 sm:flex">
                                     <TicketPercent size={20} />
                                 </span>
@@ -138,10 +159,20 @@ export default function CouponsIndex({ coupons, counts, statuses, types, sorts, 
                             </li>
                         ))}
                     </ul>
+                    <BulkBar selection={sel} noun="coupon" actions={bulkActions} exportUrl="/admin/coupons/export" processing={bulk.processing} />
                     <AdminPagination paginator={coupons} list={list} />
                     </>
                 )}
             </div>
+
+            <BulkDialog
+                open={!!dialog}
+                onClose={() => setDialog(null)}
+                onConfirm={(value) => bulk.run(dialog.action, value, { onSuccess: () => setDialog(null) })}
+                processing={bulk.processing}
+                error={bulk.errors.value || bulk.errors.ids}
+                {...dialog}
+            />
 
             <ConfirmModal
                 open={!!deleting}

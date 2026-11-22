@@ -1,9 +1,19 @@
 import { Link, router } from '@inertiajs/react';
-import { ShoppingBag } from 'lucide-react';
+import { CircleDollarSign, ListChecks, ShoppingBag, Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import { BulkBar, BulkDialog, SelectAll, SelectRow, plural, useBulkAction, useSelection } from '@/Components/Admin/Bulk';
 import { FilterDates, FilterSelect, ListToolbar, activeFilters, useList } from '@/Components/Admin/ListToolbar';
 import { OrderStatusBadge, PaymentStatusBadge } from '@/Components/Admin/OrderBadges';
 import { AdminEmpty, AdminPagination, Button, FilterChips, PageHeader } from '@/Components/Admin/ui';
 import AdminLayout from '@/Layouts/AdminLayout';
+
+function TestBadge() {
+    return (
+        <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-amber-900 uppercase" title="Paid with Paystack test keys: no real money was received">
+            Test
+        </span>
+    );
+}
 
 export default function OrdersIndex({ orders, filters, statuses, paymentStatuses, paymentMethods, fulfilments, sorts, counts, customerName }) {
     const list = useList('/admin/orders', filters, { sort: 'newest', per_page: 25 });
@@ -18,6 +28,24 @@ export default function OrdersIndex({ orders, filters, statuses, paymentStatuses
     });
     const total = Object.values(counts).reduce((a, b) => a + Number(b), 0);
     const filtered = filters.search || filters.status || active.length > 0;
+    const sel = useSelection(orders.data);
+    const bulk = useBulkAction('/admin/orders/bulk', sel);
+    const [dialog, setDialog] = useState(null);
+    const n = plural(sel.count, 'order');
+    const ask = (d) => {
+        bulk.setErrors({});
+        setDialog(d);
+    };
+    const bulkActions = [
+        { label: 'Change status…', icon: ListChecks, onClick: () => ask({ action: 'status', title: `Change status of ${n}`, confirmLabel: 'Update', message: 'Customers with an email address are told about the change, as when you update one order.', choose: { label: 'New status', options: Object.entries(statuses) } }) },
+        { label: 'Payment…', icon: CircleDollarSign, onClick: () => ask({ action: 'payment_status', title: `Change payment status of ${n}`, confirmLabel: 'Update', choose: { label: 'Payment status', options: Object.entries(paymentStatuses) } }) },
+        {
+            label: 'Delete',
+            icon: Trash2,
+            danger: true,
+            onClick: () => ask({ action: 'delete', title: `Delete ${n}?`, danger: true, confirmLabel: `Delete ${n}`, message: `${n} will be permanently deleted with their items. Paid orders are kept (they are your sales record): cancel or refund them instead.` }),
+        },
+    ];
     const tabs = [['', 'All', total], ...Object.entries(statuses).map(([k, l]) => [k, l, counts[k] ?? 0])];
 
     return (
@@ -53,6 +81,9 @@ export default function OrdersIndex({ orders, filters, statuses, paymentStatuses
                         <table className="hidden w-full text-left text-sm md:table">
                             <thead className="border-b border-zinc-100 text-xs font-semibold tracking-wide text-zinc-500 uppercase">
                                 <tr>
+                                    <th className="w-10 py-3 pl-4">
+                                        <SelectAll selection={sel} />
+                                    </th>
                                     <th className="px-4 py-3">Order</th>
                                     <th className="px-4 py-3">Customer</th>
                                     <th className="px-4 py-3">Total</th>
@@ -62,7 +93,10 @@ export default function OrdersIndex({ orders, filters, statuses, paymentStatuses
                             </thead>
                             <tbody className="divide-y divide-zinc-100">
                                 {orders.data.map((o) => (
-                                    <tr key={o.id} className="cursor-pointer hover:bg-zinc-50/60" onClick={() => router.visit(`/admin/orders/${o.id}`)}>
+                                    <tr key={o.id} className={`cursor-pointer ${sel.has(o.id) ? 'bg-zinc-50' : 'hover:bg-zinc-50/60'}`} onClick={() => router.visit(`/admin/orders/${o.id}`)}>
+                                        <td className="py-3 pl-4">
+                                            <SelectRow selection={sel} id={o.id} label={`Select order #${o.number}`} />
+                                        </td>
                                         <td className="px-4 py-3">
                                             <Link href={`/admin/orders/${o.id}`} className="font-semibold text-zinc-900 hover:underline" onClick={(e) => e.stopPropagation()}>
                                                 #{o.number}
@@ -83,8 +117,9 @@ export default function OrdersIndex({ orders, filters, statuses, paymentStatuses
                                         </td>
                                         <td className="px-4 py-3">
                                             <span className="block text-xs text-zinc-600">{o.payment_method_label}</span>
-                                            <span className="mt-1 block">
+                                            <span className="mt-1 flex items-center gap-1">
                                                 <PaymentStatusBadge status={o.payment_status} label={o.payment_status_label} />
+                                                {o.paid_in_test && <TestBadge />}
                                             </span>
                                         </td>
                                         <td className="px-4 py-3">
@@ -95,10 +130,15 @@ export default function OrdersIndex({ orders, filters, statuses, paymentStatuses
                             </tbody>
                         </table>
 
+                        <div className="flex items-center gap-3 border-b border-zinc-100 px-4 py-2.5 md:hidden">
+                            <SelectAll selection={sel} />
+                            <span className="text-xs font-medium text-zinc-500">{sel.count ? `${sel.count} selected` : 'Select all'}</span>
+                        </div>
                         <ul className="divide-y divide-zinc-100 md:hidden">
                             {orders.data.map((o) => (
-                                <li key={o.id}>
-                                    <Link href={`/admin/orders/${o.id}`} className="flex items-center gap-3.5 px-4 py-3.5 transition active:bg-zinc-50">
+                                <li key={o.id} className={`flex items-center pl-4 ${sel.has(o.id) ? 'bg-zinc-50' : ''}`}>
+                                    <SelectRow selection={sel} id={o.id} label={`Select order #${o.number}`} />
+                                    <Link href={`/admin/orders/${o.id}`} className="flex min-w-0 flex-1 items-center gap-3.5 py-3.5 pr-4 pl-3 transition active:bg-zinc-50">
                                         <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-base font-semibold ${o.status === 'pending' ? 'bg-amber-100 text-amber-800' : 'bg-zinc-100 text-zinc-700'}`} aria-hidden>
                                             {(o.customer_name || '#').charAt(0).toUpperCase()}
                                         </span>
@@ -116,16 +156,27 @@ export default function OrdersIndex({ orders, filters, statuses, paymentStatuses
                                             <span className="mt-2 flex flex-wrap gap-1.5">
                                                 <OrderStatusBadge status={o.status} label={o.status_label} />
                                                 <PaymentStatusBadge status={o.payment_status} label={o.payment_status_label} />
+                                                {o.paid_in_test && <TestBadge />}
                                             </span>
                                         </span>
                                     </Link>
                                 </li>
                             ))}
                         </ul>
+                        <BulkBar selection={sel} noun="order" actions={bulkActions} exportUrl="/admin/orders/export" processing={bulk.processing} />
                         <AdminPagination paginator={orders} list={list} />
                     </>
                 )}
             </div>
+
+            <BulkDialog
+                open={!!dialog}
+                onClose={() => setDialog(null)}
+                onConfirm={(value) => bulk.run(dialog.action, value, { onSuccess: () => setDialog(null) })}
+                processing={bulk.processing}
+                error={bulk.errors.value || bulk.errors.ids}
+                {...dialog}
+            />
         </AdminLayout>
     );
 }

@@ -28,6 +28,18 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    // Optional: set the secret keys in .env instead of Admin → Settings → Shop.
+    // Keys in .env take priority and can't be read or changed from the dashboard.
+    'paystack' => [
+        'test_secret_key' => env('PAYSTACK_TEST_SECRET_KEY'),
+        'test_public_key' => env('PAYSTACK_TEST_PUBLIC_KEY'),
+        'live_secret_key' => env('PAYSTACK_LIVE_SECRET_KEY'),
+        'live_public_key' => env('PAYSTACK_LIVE_PUBLIC_KEY'),
+        // "test" or "live". When set here, the mode switch in the dashboard is locked.
+        'mode' => env('PAYSTACK_MODE'),
+        'base_url' => 'https://api.paystack.co',
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),

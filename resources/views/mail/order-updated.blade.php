@@ -1,31 +1,37 @@
-<x-mail::message>
-# {{ $headline }}
+@extends('mail.layouts.brand')
 
-Hi {{ $detail['customer_name'] }},
+@php
+    $tone = match (true) {
+        str_ends_with($event, 'cancelled') || str_ends_with($event, 'refunded') => ['#fef2f2', '#991b1b'],
+        $event === 'payment.paid' || $event === 'status.completed' => ['#f0fdf4', '#166534'],
+        default => ['#eff6ff', '#1e40af'],
+    };
+@endphp
 
-{{ $message }}
+@section('preheader'){{ $intro }}@endsection
 
-<x-mail::table>
-| Item | Qty | Total |
-|:-----|:---:|------:|
-@foreach ($detail['items'] as $item)
-| {{ $item['name'] }}{{ $item['variant'] ? ' — '.$item['variant'] : '' }} | {{ $item['quantity'] }} | {{ $item['line_total'] }} |
-@endforeach
-@if ($detail['discount'])
-| Coupon ({{ $detail['coupon_code'] }}) | | −{{ $detail['discount'] }} |
-@endif
-| **Total** | | **{{ $detail['total'] }}** |
-</x-mail::table>
+@section('footnote')
+    You received this email because of your order #{{ $detail['number'] }} on our website.
+@endsection
 
-**Order status:** {{ $detail['status_label'] }} · **Payment:** {{ $detail['payment_status_label'] }}
+@section('content')
+    <span style="display:inline-block; margin:0 0 14px 0; padding:4px 12px; border-radius:999px; background-color:{{ $tone[0] }}; color:{{ $tone[1] }}; font-family:Arial, Helvetica, sans-serif; font-size:12px; font-weight:bold; letter-spacing:0.4px; text-transform:uppercase;">
+        {{ $detail['status_label'] }} · {{ $detail['payment_status_label'] }}
+    </span>
+    <h1 class="h1" style="margin:0 0 12px 0; font-family:Arial, Helvetica, sans-serif; font-size:26px; line-height:34px; font-weight:bold; color:#18181b;">{{ $headline }}</h1>
+    <p style="margin:0 0 6px 0;">Hi {{ $detail['customer_name'] }},</p>
+    <p style="margin:0;">{{ $intro }}</p>
 
-<x-mail::button :url="$orderUrl">
-View your order
-</x-mail::button>
+    @include('mail.partials.meta')
 
-@if ($settings->phone || $settings->email)
-Questions? @if ($settings->email)Reply to this email @endif @if ($settings->phone){{ $settings->email ? 'or call' : 'Call' }} {{ $settings->phone }}@endif.
-@endif
+    <h2 style="margin:28px 0 8px 0; font-family:Arial, Helvetica, sans-serif; font-size:13px; letter-spacing:0.6px; text-transform:uppercase; color:#71717a; font-weight:bold;">Your order</h2>
+    @include('mail.partials.items')
 
-{{ $settings->business_name }}
-</x-mail::message>
+    @include('mail.partials.button', ['url' => $orderUrl, 'label' => 'View your order'])
+
+    @if ($brand['phone'] || $brand['email'])
+        <p style="margin:24px 0 0 0; font-size:13px; line-height:20px; color:#71717a; text-align:center;">
+            Questions? {{ $brand['email'] ? 'Reply to this email' : '' }}{{ $brand['email'] && $brand['phone'] ? ' or call ' : ($brand['phone'] ? 'Call ' : '') }}{{ $brand['phone'] }}.
+        </p>
+    @endif
+@endsection

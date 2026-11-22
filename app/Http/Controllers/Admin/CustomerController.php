@@ -12,6 +12,7 @@ use App\Support\Money;
 use App\Support\WhatsApp;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -41,28 +42,52 @@ class CustomerController extends Controller
     public function index(Request $request): Response
     {
         $filters = $this->filters($request);
+        $counts = $this->segmentCounts();
+
+        // Only the segment chosen: the chip count is the list total, so skip the
+        // expensive COUNT over every customer.
+        $plain = $filters['search'] === '' && $filters['state'] === '' && $filters['contact'] === ''
+            && $filters['min_spent'] === '' && $filters['from'] === '' && $filters['to'] === '';
 
         $customers = $this->query($filters)
-            ->paginate($filters['per_page'])
+            ->paginate($filters['per_page'], ['*'], 'page', null, $plain ? $counts[$filters['segment']] : null)
             ->withQueryString()
             ->through(fn ($c) => $this->row($c));
-
-        // Counts for the segment chips (ignoring the segment itself).
-        $counts = DB::query()->fromSub($this->aggregate(), 'c')
-            ->selectRaw('COUNT(*) as total')
-            ->selectRaw('SUM(CASE WHEN orders_count = 1 THEN 1 ELSE 0 END) as n_new')
-            ->selectRaw('SUM(CASE WHEN orders_count > 1 THEN 1 ELSE 0 END) as n_returning')
-            ->selectRaw('SUM(CASE WHEN last_order_at < ? THEN 1 ELSE 0 END) as n_inactive', [now()->subDays(90)])
-            ->first();
 
         return Inertia::render('Admin/Customers/Index', [
             'customers' => $customers,
             'filters' => $filters,
             'segments' => self::SEGMENTS,
             'sorts' => self::SORTS,
-            'counts' => ['' => (int) $counts->total, 'new' => (int) $counts->n_new, 'returning' => (int) $counts->n_returning, 'inactive' => (int) $counts->n_inactive],
+            'counts' => $counts,
             'states' => $this->states(),
         ]);
+    }
+
+    /**
+     * Totals for the segment chips. Cached until an order is added or removed
+     * (or the day changes, for "inactive"), so busy shops don't recount on every visit.
+     */
+    protected function segmentCounts(): array
+    {
+        return Cache::remember('customers.counts.'.$this->ordersVersion(), now()->addDay(), function () {
+            $c = DB::query()->fromSub($this->aggregate(), 'c')
+                ->selectRaw('COUNT(*) as total')
+                ->selectRaw('SUM(CASE WHEN orders_count = 1 THEN 1 ELSE 0 END) as n_new')
+                ->selectRaw('SUM(CASE WHEN orders_count > 1 THEN 1 ELSE 0 END) as n_returning')
+                ->selectRaw('SUM(CASE WHEN last_order_at < ? THEN 1 ELSE 0 END) as n_inactive', [now()->subDays(90)])
+                ->first();
+
+            return ['' => (int) $c->total, 'new' => (int) $c->n_new, 'returning' => (int) $c->n_returning, 'inactive' => (int) $c->n_inactive];
+        });
+    }
+
+    /** Changes whenever orders are added, deleted or re-addressed (and daily). */
+    protected function ordersVersion(): string
+    {
+        $o = Order::query()->toBase()->selectRaw('COUNT(*) as n, MAX(id) as m')->first();
+
+        return now()->toDateString().'.'.$o->n.'.'.$o->m;
     }
 
     public function show(string $key): Response
@@ -71,7 +96,7 @@ class CustomerController extends Controller
         abort_if($orders->isEmpty(), 404);
 
         $latest = $orders->first();
-        $counted = $orders->where('status', '!=', 'cancelled');
+        $counted = $orders->whereNotIn('status', Order::NOT_SALES);
         $spent = $counted->sum(fn ($o) => (float) $o->total);
 
         $products = OrderItem::query()
@@ -124,8 +149,9 @@ class CustomerController extends Controller
         $filters = $this->filters($request);
         $code = \App\Models\BusinessSetting::current()->currency_code;
 
-        $rows = (function () use ($filters) {
-            foreach ($this->query($filters)->cursor() as $c) {
+        $keys = AdminList::ids($request, '/^[pe][0-9a-f]{4,39}$/');
+        $rows = (function () use ($filters, $keys) {
+            foreach ($this->query($filters)->when($keys, fn ($q) => $q->whereIn('c.customer_key', $keys))->cursor() as $c) {
                 yield [
                     $c->customer_name,
                     $c->customer_phone,
@@ -172,8 +198,8 @@ class CustomerController extends Controller
             ->whereNotNull('customer_key')
             ->select('customer_key')
             ->selectRaw('COUNT(*) as orders_count')
-            ->selectRaw("SUM(CASE WHEN status <> 'cancelled' THEN 1 ELSE 0 END) as paid_count")
-            ->selectRaw("SUM(CASE WHEN status <> 'cancelled' THEN total ELSE 0 END) as spent")
+            ->selectRaw("SUM(CASE WHEN status NOT IN ('cancelled', 'awaiting_payment') THEN 1 ELSE 0 END) as paid_count")
+            ->selectRaw("SUM(CASE WHEN status NOT IN ('cancelled', 'awaiting_payment') THEN total ELSE 0 END) as spent")
             ->selectRaw('MIN(created_at) as first_order_at')
             ->selectRaw('MAX(created_at) as last_order_at')
             ->selectRaw('MAX(id) as last_order_id')
@@ -249,9 +275,9 @@ class CustomerController extends Controller
     /** States customers' latest orders were sent to, for the filter. */
     protected function states(): array
     {
-        return Order::query()->whereNotNull('shipping_state')->where('shipping_state', '<>', '')
+        return Cache::remember('customers.states.'.$this->ordersVersion(), now()->addDay(), fn () => Order::query()->whereNotNull('shipping_state')->where('shipping_state', '<>', '')
             ->select('shipping_country', 'shipping_state')->distinct()->get()
             ->map(fn ($o) => ['value' => $o->shipping_state, 'label' => Shipping::stateName($o->shipping_country, $o->shipping_state) ?? $o->shipping_state])
-            ->unique('value')->sortBy('label')->values()->all();
+            ->unique('value')->sortBy('label')->values()->all());
     }
 }

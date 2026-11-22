@@ -1,5 +1,7 @@
 import { Link, router } from '@inertiajs/react';
-import { Laptop, ShoppingBag, Smartphone, Tablet, Users } from 'lucide-react';
+import { Laptop, ShoppingBag, Smartphone, Tablet, Trash2, Users } from 'lucide-react';
+import { useState } from 'react';
+import { BulkBar, BulkDialog, SelectAll, SelectRow, plural, useBulkAction, useSelection } from '@/Components/Admin/Bulk';
 import { FilterSelect, ListToolbar, activeFilters, useList } from '@/Components/Admin/ListToolbar';
 import { AnalyticsShell, Flag, fmt, GeoNote } from '@/Components/Admin/Analytics';
 import { AdminEmpty, AdminPagination, Badge } from '@/Components/Admin/ui';
@@ -21,6 +23,19 @@ export default function Visitors({ periods, geo, summary, visitors, filters, cou
     const active = activeFilters(filters, { country: countries.map((c) => ({ value: c.code, label: c.name })), channel: (v) => `From ${v}` });
     const filtered = filters.country || filters.channel || filters.search;
 
+    const sel = useSelection(visitors.data);
+    const bulk = useBulkAction('/admin/analytics/visitors/bulk', sel);
+    const [dialog, setDialog] = useState(null);
+    const n = plural(sel.count, 'visitor');
+    const bulkActions = [
+        {
+            label: 'Delete',
+            icon: Trash2,
+            danger: true,
+            onClick: () => setDialog({ action: 'delete', title: `Delete ${n}?`, danger: true, confirmLabel: `Delete ${n}`, message: `The visit history of ${n} (visits, page views and events) will be permanently deleted, and your statistics will no longer count them. Their orders are kept.` }),
+        },
+    ];
+
     return (
         <AdminLayout title="Visitors">
             <AnalyticsShell title="Visitors" summary={summary} periods={periods}>
@@ -37,6 +52,9 @@ export default function Visitors({ periods, geo, summary, visitors, filters, cou
                             <table className="hidden w-full text-left text-sm lg:table">
                                 <thead className="border-b border-zinc-100 text-xs font-semibold tracking-wide text-zinc-500 uppercase">
                                     <tr>
+                                        <th className="w-10 py-3 pl-4">
+                                            <SelectAll selection={sel} />
+                                        </th>
                                         <th className="px-4 py-3">Visitor</th>
                                         <th className="px-4 py-3">Location</th>
                                         <th className="px-4 py-3">Device</th>
@@ -50,7 +68,10 @@ export default function Visitors({ periods, geo, summary, visitors, filters, cou
                                     {visitors.data.map((v) => {
                                         const Icon = DEVICE_ICONS[v.device] || Laptop;
                                         return (
-                                            <tr key={v.id} className="cursor-pointer hover:bg-zinc-50/60" onClick={() => router.visit(`/admin/analytics/visitors/${v.id}`)}>
+                                            <tr key={v.id} className={`cursor-pointer ${sel.has(v.id) ? 'bg-zinc-50' : 'hover:bg-zinc-50/60'}`} onClick={() => router.visit(`/admin/analytics/visitors/${v.id}`)}>
+                                                <td className="py-3 pl-4">
+                                                    <SelectRow selection={sel} id={v.id} label={`Select ${v.name}`} />
+                                                </td>
                                                 <td className="px-4 py-3">
                                                     <Link href={`/admin/analytics/visitors/${v.id}`} className="flex items-center gap-2 font-medium text-zinc-900 hover:underline" onClick={(e) => e.stopPropagation()}>
                                                         {v.online && <span className="h-2 w-2 rounded-full bg-emerald-500" title="Online now" />}
@@ -83,10 +104,15 @@ export default function Visitors({ periods, geo, summary, visitors, filters, cou
                                 </tbody>
                             </table>
 
+                            <div className="flex items-center gap-3 border-b border-zinc-100 px-4 py-2.5 lg:hidden">
+                                <SelectAll selection={sel} />
+                                <span className="text-xs font-medium text-zinc-500">{sel.count ? `${sel.count} selected` : 'Select all'}</span>
+                            </div>
                             <ul className="divide-y divide-zinc-100 lg:hidden">
                                 {visitors.data.map((v) => (
-                                    <li key={v.id}>
-                                        <Link href={`/admin/analytics/visitors/${v.id}`} className="block p-4">
+                                    <li key={v.id} className={`flex items-start pl-4 ${sel.has(v.id) ? 'bg-zinc-50' : ''}`}>
+                                        <SelectRow selection={sel} id={v.id} label={`Select ${v.name}`} className="mt-3.5" />
+                                        <Link href={`/admin/analytics/visitors/${v.id}`} className="block min-w-0 flex-1 py-4 pr-4 pl-3">
                                             <div className="flex items-center justify-between gap-3">
                                                 <span className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
                                                     {v.online && <span className="h-2 w-2 rounded-full bg-emerald-500" />}
@@ -105,11 +131,20 @@ export default function Visitors({ periods, geo, summary, visitors, filters, cou
                                     </li>
                                 ))}
                             </ul>
+                            <BulkBar selection={sel} noun="visitor" actions={bulkActions} exportUrl="/admin/analytics/visitors/export" exportQuery={list.query()} processing={bulk.processing} />
                             <AdminPagination paginator={visitors} list={list} />
                         </>
                     )}
                 </div>
                 <GeoNote geo={geo} />
+            <BulkDialog
+                    open={!!dialog}
+                    onClose={() => setDialog(null)}
+                    onConfirm={(value) => bulk.run(dialog.action, value, { onSuccess: () => setDialog(null) })}
+                    processing={bulk.processing}
+                    error={bulk.errors.value || bulk.errors.ids}
+                    {...dialog}
+                />
             </AnalyticsShell>
         </AdminLayout>
     );

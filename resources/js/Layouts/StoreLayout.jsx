@@ -4,6 +4,7 @@ import CartDrawer from '@/Components/Store/CartDrawer';
 import Footer from '@/Components/Store/Footer';
 import Header from '@/Components/Store/Header';
 import MobileBottomNav from '@/Components/Store/MobileBottomNav';
+import { ShopInstallPrompt } from '@/Components/InstallApp';
 import StoreToast from '@/Components/Store/StoreToast';
 import { FloatingWhatsApp } from '@/Components/Store/WhatsAppButton';
 import useTheme from '@/hooks/useTheme';
@@ -39,7 +40,7 @@ function PreviewBar({ preview }) {
  * page's enquiry bar), which takes the bottom navigation's place.
  */
 export default function StoreLayout({ children, hideFloatingWhatsApp = false, hideBottomNav = false }) {
-    const { seo } = usePage().props;
+    const { seo, brand } = usePage().props;
     const theme = useTheme();
 
     return (
@@ -55,6 +56,8 @@ export default function StoreLayout({ children, hideFloatingWhatsApp = false, hi
             <Footer />
             {!hideFloatingWhatsApp && <FloatingWhatsApp desktopOnly={!hideBottomNav} />}
             {!hideBottomNav && <MobileBottomNav />}
+            {/* Not on cart/checkout (no bottom bar there), nor while previewing a template. */}
+            {!hideBottomNav && !theme.preview && <ShopInstallPrompt name={brand?.name || 'our'} />}
             <StoreToast />
             <PreviewBar preview={theme.preview} />
             <CartDrawer />

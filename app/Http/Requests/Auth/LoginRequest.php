@@ -28,11 +28,19 @@ class LoginRequest extends FormRequest
         ];
     }
 
-    public function authenticate(): void
+    /**
+     * Checks the email and password WITHOUT signing in: accounts with two-factor
+     * sign-in still need their code (AuthController decides).
+     */
+    public function authenticate(): \App\Models\User
     {
         $this->ensureIsNotRateLimited();
 
-        if (! Auth::attempt($this->only('email', 'password'), $this->boolean('remember'))) {
+        $credentials = $this->only('email', 'password');
+        $provider = Auth::guard('web')->getProvider();
+        $user = $provider->retrieveByCredentials(['email' => $credentials['email']]);
+
+        if (! $user || ! $provider->validateCredentials($user, $credentials)) {
             RateLimiter::hit($this->throttleKey(), 60);
 
             throw ValidationException::withMessages([
@@ -41,6 +49,9 @@ class LoginRequest extends FormRequest
         }
 
         RateLimiter::clear($this->throttleKey());
+        $provider->rehashPasswordIfRequired($user, $credentials);
+
+        return $user;
     }
 
     protected function ensureIsNotRateLimited(): void

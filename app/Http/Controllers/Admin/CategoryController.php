@@ -90,7 +90,7 @@ class CategoryController extends Controller
 
     public function export(Request $request): StreamedResponse
     {
-        $query = $this->listQuery($this->filters($request));
+        $query = $this->listQuery($this->filters($request))->when(AdminList::ids($request), fn ($q, $ids) => $q->whereIn('id', $ids));
 
         $rows = (function () use ($query) {
             foreach ($query->lazy(200) as $c) {
@@ -190,6 +190,52 @@ class CategoryController extends Controller
         $this->images->delete($category->image_path);
 
         return redirect()->route('admin.categories.index')->with('success', 'Category deleted.');
+    }
+
+    public const BULK_ACTIONS = ['show', 'hide', 'feature', 'unfeature', 'delete'];
+
+    /**
+     * Bulk actions on the ticked categories. Deleting needs `value`: "uncategorize",
+     * or the id of a category (not one being deleted) to move their products to.
+     */
+    public function bulk(Request $request): RedirectResponse
+    {
+        $bulk = AdminList::bulk($request, self::BULK_ACTIONS, ['nullable', 'string', 'max:20']);
+        $categories = Category::query()->whereIn('id', $bulk['ids'])->withCount('products')->get();
+        $n = AdminList::count($categories->count(), 'category');
+
+        if ($bulk['action'] !== 'delete') {
+            DB::transaction(fn () => $categories->each(fn (Category $c) => $c->update(match ($bulk['action']) {
+                'show' => ['is_published' => true],
+                'hide' => ['is_published' => false],
+                'feature' => ['is_featured' => true],
+                'unfeature' => ['is_featured' => false],
+            })));
+
+            return back()->with('success', "{$n} updated.");
+        }
+
+        $value = (string) $bulk['value'];
+        $moveTo = null;
+        if ($categories->sum('products_count') > 0) {
+            if ($value === 'uncategorize') {
+                $moveTo = null;
+            } elseif (ctype_digit($value) && ! in_array((int) $value, $bulk['ids'], true) && Category::query()->whereKey((int) $value)->exists()) {
+                $moveTo = (int) $value;
+            } else {
+                throw ValidationException::withMessages(['value' => 'Choose where the products in these categories should go.']);
+            }
+        }
+
+        DB::transaction(function () use ($categories, $moveTo) {
+            foreach ($categories as $c) {
+                $c->products()->update(['category_id' => $moveTo]);
+                $c->delete();
+            }
+        });
+        $categories->each(fn (Category $c) => $this->images->delete($c->image_path));
+
+        return back()->with('success', "{$n} deleted.");
     }
 
     protected function validated(Request $request, ?Category $category = null): array

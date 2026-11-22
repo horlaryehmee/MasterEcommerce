@@ -14,6 +14,8 @@ use App\Support\WhatsApp;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -63,7 +65,9 @@ class OrderController extends Controller
     {
         $filters = $this->filters($request);
 
-        $query = $this->query($filters)->withSum('items as item_count', 'quantity');
+        $query = $this->query($filters)->withSum('items as item_count', 'quantity')
+            // Paid with Paystack TEST keys: no real money arrived.
+            ->withExists(['payments as paid_in_test' => fn ($q) => $q->where('mode', 'test')->where('status', 'success')]);
         match ($filters['sort']) {
             'oldest' => $query->oldest()->oldest('id'),
             'total_desc' => $query->orderByDesc('total')->latest('id'),
@@ -86,6 +90,7 @@ class OrderController extends Controller
                 'payment_method_label' => Order::PAYMENT_METHODS[$o->payment_method] ?? $o->payment_method,
                 'payment_status' => $o->payment_status,
                 'payment_status_label' => Order::PAYMENT_STATUSES[$o->payment_status] ?? $o->payment_status,
+                'paid_in_test' => (bool) $o->paid_in_test,
                 'fulfilment_label' => Order::FULFILMENT[$o->fulfilment] ?? $o->fulfilment,
                 'created_at' => $o->created_at?->format('j M Y, g:i a'),
                 'created_ago' => $o->created_at?->diffForHumans(),
@@ -108,7 +113,8 @@ class OrderController extends Controller
     {
         $filters = $this->filters($request);
         $code = BusinessSetting::current()->currency_code;
-        $query = $this->query($filters)->withSum('items as item_count', 'quantity')->with('items:id,order_id,product_name,variant_label,quantity');
+        $query = $this->query($filters)->withSum('items as item_count', 'quantity')->with('items:id,order_id,product_name,variant_label,quantity')
+            ->when(AdminList::ids($request), fn ($q, $ids) => $q->whereIn('id', $ids));
         // Streamed in batches so large shops don't run out of memory.
         $orders = $filters['sort'] === 'oldest' ? $query->lazyById(200) : $query->lazyByIdDesc(200);
 
@@ -160,6 +166,20 @@ class OrderController extends Controller
             ] : null,
             'statuses' => Order::STATUSES,
             'paymentStatuses' => Order::PAYMENT_STATUSES,
+            'paidAt' => $order->paid_at ? AdminList::localDate($order->paid_at, 'j M Y, g:i a') : null,
+            // Online payment attempts (Paystack), newest first.
+            'payments' => $order->payments()->get()->map(fn (\App\Models\Payment $p) => [
+                'id' => $p->id,
+                'reference' => $p->reference,
+                'status' => $p->status,
+                'status_label' => \App\Models\Payment::STATUSES[$p->status] ?? $p->status,
+                'amount' => Money::format($p->amount / 100),
+                'amount_paid' => $p->amount_paid !== null && $p->amount_paid !== $p->amount ? Money::format($p->amount_paid / 100) : null,
+                'channel' => $p->channel,
+                'mode' => $p->mode,
+                'message' => $p->message,
+                'at' => AdminList::localDate($p->verified_at ?? $p->created_at, 'j M Y, g:i a'),
+            ]),
             // wa.me needs the international format; local numbers (0801…) get a call link only.
             'customerWhatsapp' => $order->customerWhatsappLink("Hello {$order->customer_name}, this is about your order #{$order->number}."),
         ]);
@@ -172,9 +192,65 @@ class OrderController extends Controller
             'payment_status' => ['sometimes', 'required', Rule::in(array_keys(Order::PAYMENT_STATUSES))],
         ]);
 
+        if (($data['payment_status'] ?? null) === 'paid' && $order->status === 'awaiting_payment' && ! isset($data['status'])) {
+            $data['status'] = 'pending';
+        }
         $order->update($data);
         $emailed = $mailer->updated($order);
 
         return back()->with('success', "Order #{$order->number} updated.".($emailed ? ' The customer has been emailed.' : ''));
+    }
+
+    /** The order's emails as the customer (or owner) receives them. */
+    public function emailPreview(Order $order, string $type): \Illuminate\Http\Response
+    {
+        $mail = match ($type) {
+            'placed' => new \App\Mail\OrderPlaced($order),
+            'owner' => new \App\Mail\OrderPlaced($order, true),
+            'updated' => new \App\Mail\OrderUpdated($order, 'status.confirmed'),
+        };
+
+        return response($mail->render())->header('X-Frame-Options', 'SAMEORIGIN');
+    }
+
+    public const BULK_ACTIONS = ['status', 'payment_status', 'delete'];
+
+    /**
+     * Bulk actions on the ticked orders. Status changes email the customer just
+     * like changing one order. Paid orders are never deleted (they are your
+     * sales record); cancel or refund them instead.
+     */
+    public function bulk(Request $request, OrderMailer $mailer): RedirectResponse
+    {
+        $bulk = AdminList::bulk($request, self::BULK_ACTIONS, ['nullable', 'string', 'max:20']);
+        $value = (string) $bulk['value'];
+        $orders = Order::query()->whereIn('id', $bulk['ids'])->get();
+
+        if ($bulk['action'] === 'delete') {
+            [$paid, $deletable] = $orders->partition(fn (Order $o) => $o->payment_status === 'paid');
+            DB::transaction(fn () => $deletable->each(function (Order $o) {
+                $o->items()->delete();
+                $o->delete();
+            }));
+            $message = AdminList::count($deletable->count(), 'order').' deleted.';
+            if ($paid->isNotEmpty()) {
+                $message .= ' '.AdminList::count($paid->count(), 'paid order').' kept: paid orders can’t be deleted. Cancel or refund them instead.';
+            }
+
+            return back()->with($deletable->isEmpty() ? 'error' : 'success', $message);
+        }
+
+        $allowed = $bulk['action'] === 'status' ? Order::STATUSES : Order::PAYMENT_STATUSES;
+        if (! array_key_exists($value, $allowed)) {
+            throw ValidationException::withMessages(['value' => 'Choose a status.']);
+        }
+
+        $emailed = 0;
+        foreach ($orders as $o) {
+            $o->update([$bulk['action'] => $value]);
+            $emailed += (int) $mailer->updated($o);
+        }
+
+        return back()->with('success', AdminList::count($orders->count(), 'order').' marked “'.$allowed[$value].'”.'.($emailed ? ' '.AdminList::count($emailed, 'customer').' emailed.' : ''));
     }
 }

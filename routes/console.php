@@ -16,6 +16,8 @@ Artisan::command('inspire', function () {
 // (Requires the Laravel scheduler cron: * * * * * php /path/to/artisan schedule:run)
 Schedule::command('stats:geoip-update')->monthlyOn(3, '03:00')->withoutOverlapping();
 Schedule::command('stats:prune')->dailyAt('03:30');
+// Online-payment orders never paid: re-check with Paystack, then cancel (frees held coupon uses).
+Schedule::command('orders:cancel-unpaid')->hourly()->withoutOverlapping();
 
 /*
 | Update agent (Admin → Updates → Update server). Runs every minute but only

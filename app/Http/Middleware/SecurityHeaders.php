@@ -16,10 +16,27 @@ class SecurityHeaders
         $response->headers->set('X-Content-Type-Options', 'nosniff');
         $response->headers->set('X-Frame-Options', 'SAMEORIGIN');
         $response->headers->set('Referrer-Policy', 'strict-origin-when-cross-origin');
-        $response->headers->set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+        $response->headers->set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+        // Safe for every page: no <base> hijacking, no plugins, no framing by other sites.
+        $response->headers->set('Content-Security-Policy', "base-uri 'self'; object-src 'none'; frame-ancestors 'self'");
+        $response->headers->set('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
+
+        // HTTPS sites: browsers refuse plain-http connections for a year (stops SSL-stripping).
+        if ($request->isSecure()) {
+            $response->headers->set('Strict-Transport-Security', 'max-age=31536000');
+        }
 
         if ($request->is('admin', 'admin/*')) {
             $response->headers->set('X-Robots-Tag', 'noindex, nofollow');
+            // Customer details and orders must not be kept in browser or proxy caches.
+            if (! $response->headers->has('Content-Disposition')) {
+                $response->headers->set('Cache-Control', 'no-store, private');
+            }
+        }
+
+        // Order pages hold personal details: never cache them in shared caches.
+        if ($request->is('order/*', 'checkout', 'payments/*')) {
+            $response->headers->set('Cache-Control', 'no-store, private');
         }
 
         return $response;

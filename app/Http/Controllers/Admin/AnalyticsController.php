@@ -77,7 +77,8 @@ class AnalyticsController extends Controller
     public function visitorsExport(Request $request): \Symfony\Component\HttpFoundation\StreamedResponse
     {
         $r = $this->report($request);
-        $query = $this->visitorsQuery($r, $this->visitorFilters($request));
+        $query = $this->visitorsQuery($r, $this->visitorFilters($request))
+            ->when(\App\Support\AdminList::ids($request), fn ($q, $ids) => $q->whereIn('v.id', $ids));
 
         $rows = (function () use ($query) {
             foreach ($query->cursor() as $v) {
@@ -97,9 +98,18 @@ class AnalyticsController extends Controller
         ], $rows);
     }
 
+    /** Forget the ticked visitors: their visits, page views and events. Their orders stay (unlinked). */
+    public function visitorsBulk(Request $request): \Illuminate\Http\RedirectResponse
+    {
+        $bulk = \App\Support\AdminList::bulk($request, ['delete']);
+        $n = DB::table('stats_visitors')->whereIn('id', $bulk['ids'])->delete();
+
+        return back()->with('success', \App\Support\AdminList::count($n, 'visitor').' and their visit history deleted.');
+    }
+
     protected function visitorsQuery($r, array $filters)
     {
-        $orders = DB::table('orders')->where('status', '!=', 'cancelled')->whereNotNull('stats_visitor_id')
+        $orders = DB::table('orders')->whereNotIn('status', \App\Models\Order::NOT_SALES)->whereNotNull('stats_visitor_id')
             ->selectRaw('stats_visitor_id, COUNT(*) as orders_count, SUM(total) as revenue')->groupBy('stats_visitor_id');
 
         $query = DB::table('stats_visitors as v')

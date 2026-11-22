@@ -9,6 +9,8 @@ use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password as PasswordRule;
@@ -25,12 +27,89 @@ class AuthController extends Controller
         ]);
     }
 
+    /** Minutes a correct password stays valid while waiting for the two-factor code. */
+    public const TWO_FACTOR_WINDOW = 10;
+
+    /** Wrong codes allowed per account within 15 minutes, before the sign-in is cancelled. */
+    public const TWO_FACTOR_ATTEMPTS = 5;
+
     public function login(LoginRequest $request): RedirectResponse
     {
-        $request->authenticate();
+        $user = $request->authenticate();
         $request->session()->regenerate();
 
+        if ($user->hasTwoFactor()) {
+            // Not signed in yet: remember who passed the password step, briefly.
+            $request->session()->put('login.two_factor', [
+                'id' => $user->id,
+                'remember' => $request->boolean('remember'),
+                'expires' => now()->addMinutes(self::TWO_FACTOR_WINDOW)->getTimestamp(),
+            ]);
+
+            return redirect()->route('admin.two-factor.challenge');
+        }
+
+        Auth::guard('web')->login($user, $request->boolean('remember'));
+
         return redirect()->intended(route('admin.dashboard'));
+    }
+
+    public function showTwoFactorChallenge(Request $request): Response|RedirectResponse
+    {
+        if (! $this->pendingTwoFactorUser($request)) {
+            return redirect()->route('admin.login')->with('status', 'Please log in again.');
+        }
+
+        return Inertia::render('Admin/Auth/TwoFactorChallenge');
+    }
+
+    public function twoFactorChallenge(Request $request): RedirectResponse
+    {
+        $request->validate(['code' => ['required', 'string', 'max:20']]);
+        $user = $this->pendingTwoFactorUser($request);
+        if (! $user) {
+            return redirect()->route('admin.login')->with('status', 'That took too long. Please log in again.');
+        }
+
+        $key = 'two-factor:'.$user->id;
+        if (RateLimiter::tooManyAttempts($key, self::TWO_FACTOR_ATTEMPTS)) {
+            $request->session()->forget('login.two_factor');
+
+            return redirect()->route('admin.login')->with('status', 'Too many wrong codes. Please wait '.ceil(RateLimiter::availableIn($key) / 60).' minutes and log in again.');
+        }
+
+        if (! $user->verifyTwoFactorCode((string) $request->input('code'))) {
+            RateLimiter::hit($key, 15 * 60);
+            Log::notice('Wrong two-factor code', ['user' => $user->id, 'ip' => $request->ip()]);
+
+            throw ValidationException::withMessages(['code' => 'That code isn’t right. Enter the current 6-digit code from your app, or one of your recovery codes.']);
+        }
+
+        RateLimiter::clear($key);
+        $remember = (bool) ($request->session()->get('login.two_factor')['remember'] ?? false);
+        $request->session()->forget('login.two_factor');
+        Auth::guard('web')->login($user, $remember);
+        $request->session()->regenerate();
+
+        $left = count($user->fresh()->two_factor_recovery_codes ?? []);
+        $redirect = redirect()->intended(route('admin.dashboard'));
+
+        return $left <= 2
+            ? $redirect->with('error', "You have {$left} recovery ".($left === 1 ? 'code' : 'codes').' left. Make new ones in Profile → Two-factor sign-in.')
+            : $redirect;
+    }
+
+    protected function pendingTwoFactorUser(Request $request): ?User
+    {
+        $pending = $request->session()->get('login.two_factor');
+        if (! is_array($pending) || ($pending['expires'] ?? 0) < now()->getTimestamp()) {
+            $request->session()->forget('login.two_factor');
+
+            return null;
+        }
+        $user = User::query()->find($pending['id'] ?? 0);
+
+        return $user?->hasTwoFactor() ? $user : null;
     }
 
     public function logout(Request $request): RedirectResponse

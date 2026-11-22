@@ -1,0 +1,10 @@
+# Minimal OpenSSL config: lets PHP create EC keys on hosts without a system openssl.cnf (e.g. Windows).
+openssl_conf = default_conf
+
+[default_conf]
+
+[req]
+default_bits = 2048
+distinguished_name = req_dn
+
+[req_dn]

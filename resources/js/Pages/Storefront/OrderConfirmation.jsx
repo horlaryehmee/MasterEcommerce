@@ -1,6 +1,6 @@
-import { Link } from '@inertiajs/react';
-import { Banknote, Check, CheckCircle2, Copy, Landmark, MapPin, Truck } from 'lucide-react';
-import { useState } from 'react';
+import { Link, router } from '@inertiajs/react';
+import { AlertTriangle, Banknote, Check, CheckCircle2, Copy, CreditCard, Landmark, Loader2, Lock, MapPin, ShieldAlert, Truck, XCircle } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { WhatsAppIcon } from '@/Components/Icons';
 import Img from '@/Components/Store/Img';
 import StoreLayout from '@/Layouts/StoreLayout';
@@ -54,8 +54,37 @@ function BankDetails({ bank, total }) {
     );
 }
 
+function PayOnline({ order, payUrl }) {
+    const [busy, setBusy] = useState(false);
+    return (
+        <div className="rounded-3xl border border-stone-200 p-5 sm:p-6">
+            <h2 className="flex items-center gap-2 text-lg font-semibold text-stone-900">
+                <CreditCard size={20} /> Complete your payment
+            </h2>
+            <p className="mt-2 text-sm text-stone-600">
+                Pay <strong className="text-stone-900">{order.total}</strong> securely with card, bank transfer or USSD on Paystack. We confirm your order as soon as the payment is verified.
+            </p>
+            {payUrl ? (
+                <button type="button" disabled={busy} onClick={() => router.post(payUrl, {}, { onStart: () => setBusy(true), onFinish: () => setBusy(false) })} className="btn-primary mt-4 h-13 w-full text-base disabled:opacity-60 sm:w-auto sm:px-8">
+                    <Lock size={18} /> {busy ? 'Opening secure payment…' : `Pay ${order.total} now`}
+                </button>
+            ) : (
+                <p className="mt-4 text-sm text-stone-600">Online payment isn’t available right now. Please contact us to pay for this order.</p>
+            )}
+            <p className="mt-3 flex items-center gap-1.5 text-xs text-stone-500">
+                <Lock size={12} /> Your card details are entered on Paystack’s page and never reach this website.
+            </p>
+            <p className="mt-1 text-xs text-stone-500">Already sent a bank transfer? Please don’t pay again: we’ll confirm it automatically and email you.</p>
+        </div>
+    );
+}
+
 /** What the customer should do next, per payment method. */
-function NextStep({ order, whatsappUrl, bank }) {
+function NextStep({ order, whatsappUrl, bank, payUrl }) {
+    if (order.payment_method === 'paystack') {
+        return <PayOnline order={order} payUrl={payUrl} />;
+    }
+
     if (order.payment_method === 'whatsapp') {
         return (
             <div className="rounded-3xl bg-emerald-50 p-5 sm:p-6">
@@ -114,10 +143,91 @@ function NextStep({ order, whatsappUrl, bank }) {
     );
 }
 
-export default function OrderConfirmation({ order, whatsappUrl, bank, justPlaced }) {
+/**
+ * The top of the page for online (Paystack) orders: says plainly whether the
+ * payment went through, so nobody thinks they've paid when they haven't.
+ */
+function OnlinePaymentHero({ state, order, justPlaced, whatsappUrl }) {
+    const [waited, setWaited] = useState(0);
+
+    // Confirming: ask again every 5 seconds for up to 2 minutes.
+    useEffect(() => {
+        if (state !== 'confirming' || waited >= 24) return;
+        const t = setTimeout(() => router.reload({ preserveScroll: true, onFinish: () => setWaited((w) => w + 1) }), 5000);
+        return () => clearTimeout(t);
+    }, [state, waited]);
+
+    const first = order.customer_name.split(' ')[0];
+    const views = {
+        paid: {
+            icon: <CheckCircle2 size={34} strokeWidth={1.8} />,
+            tone: 'bg-emerald-100 text-emerald-700',
+            title: justPlaced ? `Thank you, ${first}!` : `Order #${order.number}`,
+            text: (
+                <>
+                    Payment received. Your order <strong className="text-stone-900">#{order.number}</strong> is confirmed.
+                </>
+            ),
+            note: justPlaced && order.customer_email ? `A confirmation has been sent to ${order.customer_email}.` : null,
+        },
+        confirming: {
+            icon: <Loader2 size={32} className="animate-spin" />,
+            tone: 'bg-sky-100 text-sky-700',
+            title: 'Confirming your payment…',
+            text: waited >= 24 ? 'Your bank is taking longer than usual. You can close this page: we’ll email you as soon as the payment is confirmed. Please don’t pay again.' : 'This usually takes a few seconds. Please don’t close this page or pay again.',
+        },
+        not_paid: {
+            icon: <AlertTriangle size={32} strokeWidth={1.8} />,
+            tone: 'bg-amber-100 text-amber-700',
+            title: 'Payment not completed',
+            text: (
+                <>
+                    You haven’t been charged. Your order <strong className="text-stone-900">#{order.number}</strong> is saved: complete the payment below to confirm it.
+                </>
+            ),
+        },
+        review: {
+            icon: <ShieldAlert size={32} strokeWidth={1.8} />,
+            tone: 'bg-amber-100 text-amber-700',
+            title: 'We’re checking your payment',
+            text: 'The payment we received doesn’t match this order’s total. We’ll look into it and contact you. Please don’t pay again.',
+        },
+        cancelled: {
+            icon: <XCircle size={32} strokeWidth={1.8} />,
+            tone: 'bg-stone-200 text-stone-600',
+            title: 'Order cancelled',
+            text: 'The payment wasn’t completed, so this order was cancelled. You weren’t charged.',
+        },
+    };
+    const v = views[state] ?? views.not_paid;
+
+    return (
+        <div className="text-center" aria-live="polite">
+            <span className={`mx-auto flex h-16 w-16 items-center justify-center rounded-full ${v.tone}`}>{v.icon}</span>
+            <h1 className="mt-5 text-3xl font-bold tracking-tight text-balance text-stone-950 sm:text-4xl">{v.title}</h1>
+            <p className="mx-auto mt-2 max-w-xl text-stone-600">{v.text}</p>
+            {v.note && <p className="mt-1 text-sm text-stone-500">{v.note}</p>}
+            {state === 'cancelled' && (
+                <Link href="/products" className="btn-primary mt-5 inline-flex h-12 px-6">
+                    Continue shopping
+                </Link>
+            )}
+            {state === 'review' && whatsappUrl && (
+                <a href={whatsappUrl} target="_blank" rel="noopener noreferrer" className="btn-whatsapp mt-5 inline-flex h-12 px-6">
+                    <WhatsAppIcon size={18} /> Message us
+                </a>
+            )}
+        </div>
+    );
+}
+
+export default function OrderConfirmation({ order, whatsappUrl, bank, justPlaced, payUrl, paymentState }) {
     return (
         <StoreLayout>
             <div className="container-page max-w-3xl pt-8 pb-16 sm:pt-12">
+                {paymentState ? (
+                    <OnlinePaymentHero state={paymentState} order={order} justPlaced={justPlaced} whatsappUrl={whatsappUrl} />
+                ) : (
                 <div className="text-center">
                     <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
                         <CheckCircle2 size={34} strokeWidth={1.8} />
@@ -136,9 +246,19 @@ export default function OrderConfirmation({ order, whatsappUrl, bank, justPlaced
                     </p>
                     {justPlaced && order.customer_email && <p className="mt-1 text-sm text-stone-500">A confirmation has been sent to {order.customer_email}.</p>}
                 </div>
+                )}
 
                 <div className="mt-8 space-y-6">
-                    {order.status !== 'cancelled' && order.payment_status !== 'paid' && <NextStep order={order} whatsappUrl={whatsappUrl} bank={bank} />}
+                    {/* Online orders: the pay button only while it's safe to pay (not while confirming or under review). */}
+                    {order.status !== 'cancelled' && order.payment_status !== 'paid' && (!paymentState || paymentState === 'not_paid') && <NextStep order={order} whatsappUrl={whatsappUrl} bank={bank} payUrl={payUrl} />}
+                    {order.payment_status === 'paid' && (
+                        <div className="flex items-center gap-3 rounded-3xl bg-emerald-50 p-5 text-emerald-950 sm:p-6">
+                            <CheckCircle2 size={22} className="shrink-0 text-emerald-700" />
+                            <p className="text-sm">
+                                <strong>Paid.</strong> We’ve received your payment of {order.total}.
+                            </p>
+                        </div>
+                    )}
 
                     <section className="rounded-3xl border border-stone-200 p-5 sm:p-6">
                         <h2 className="text-lg font-semibold text-stone-900">Order details</h2>

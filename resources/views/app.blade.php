@@ -23,7 +23,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="xsrf-cookie" content="{{ \App\Http\Middleware\ValidateCsrfToken::cookieName() }}">
-    <meta name="theme-color" content="{{ $primary }}">
+    <meta name="theme-color" content="{{ $storefront ? $primary : '#FFFFFF' }}">
     <meta name="author" content="{{ config('catalog.author.name') }}">
 
     @isset($seo)
@@ -67,8 +67,21 @@
 
     @if ($favicon)
         <link rel="icon" type="image/png" href="{{ $favicon }}">
+    @endif
+
+    {{-- Installable app: the admin and the shop install as two separate apps. --}}
+    @php($pwaApp = $storefront ? 'shop' : 'admin')
+    <link rel="manifest" href="{{ $storefront ? route('pwa.manifest') : route('admin.manifest') }}">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="{{ $storefront ? \Illuminate\Support\Str::limit($settings->business_name, 12, '') : 'Admin' }}">
+    @if ($touchIcon = \App\Support\AppIcon::url($pwaApp, 180))
+        <link rel="apple-touch-icon" href="{{ $touchIcon }}">
+    @elseif ($favicon)
         <link rel="apple-touch-icon" href="{{ $favicon }}">
     @endif
+    <meta name="sw-url" content="{{ route('pwa.sw') }}">
 
     @if ($brand['stylesheet'])
         <link rel="preconnect" href="https://fonts.googleapis.com">

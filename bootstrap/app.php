@@ -54,7 +54,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias(['shop' =>\App\Http\Middleware\EnsureShopEnabled::class]);
 
         // The stats beacon uses sendBeacon (no CSRF token) and sets a plain, unencrypted visitor cookie.
-        $middleware->validateCsrfTokens(except: ['hello']);
+        // Paystack's webhook is authenticated by its HMAC signature (PaystackController::webhook).
+        $middleware->validateCsrfTokens(except: ['hello', 'payments/paystack/webhook']);
         $middleware->encryptCookies(except: ['nx_vid']);
 
         // A space is a valid thousands separator, so don't trim these fields.
@@ -64,6 +65,9 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->redirectUsersTo(fn () => route('admin.dashboard'));
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        // Never put secrets back into the session when a form has errors.
+        $exceptions->dontFlash(['current_password', 'password', 'password_confirmation', 'mail_password', 'paystack_secret_key']);
+
         // Friendly, branded error pages (the debug page is still shown locally for 500s).
         $exceptions->respond(function (Response $response, Throwable $e, Request $request) {
             // Before installation there is no database for the branded error page.

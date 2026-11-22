@@ -84,7 +84,10 @@ class CouponController extends Controller
     {
         $filters = $this->filters($request);
         $all = $this->listRows($filters);
-        $rows = ($filters['status'] ? $all->where('row.status', $filters['status']) : $all)->map(fn ($r) => [
+        $ids = AdminList::ids($request);
+        $rows = ($filters['status'] ? $all->where('row.status', $filters['status']) : $all)
+            ->when($ids, fn ($rows) => $rows->filter(fn ($r) => in_array($r['model']->id, $ids, true)))
+            ->map(fn ($r) => [
             $r['row']['code'],
             $r['row']['description'],
             $r['row']['offer'],
@@ -176,6 +179,28 @@ class CouponController extends Controller
         $coupon->delete();
 
         return redirect()->route('admin.coupons.index')->with('success', "Coupon {$coupon->code} deleted.");
+    }
+
+    public const BULK_ACTIONS = ['activate', 'deactivate', 'delete'];
+
+    public function bulk(Request $request): RedirectResponse
+    {
+        $bulk = AdminList::bulk($request, self::BULK_ACTIONS);
+        $coupons = Coupon::query()->whereIn('id', $bulk['ids'])->get();
+        $n = AdminList::count($coupons->count(), 'coupon');
+
+        match ($bulk['action']) {
+            'activate' => $coupons->each->update(['is_active' => true]),
+            'deactivate' => $coupons->each->update(['is_active' => false]),
+            // Orders keep the code and discount they were placed with.
+            'delete' => $coupons->each->delete(),
+        };
+
+        return back()->with('success', $n.match ($bulk['action']) {
+            'activate' => ' switched on.',
+            'deactivate' => ' switched off.',
+            'delete' => ' deleted.',
+        });
     }
 
     protected function row(Coupon $c): array

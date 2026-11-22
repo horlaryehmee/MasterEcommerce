@@ -98,12 +98,16 @@ class BusinessSetting extends Model
             'ship_except_countries' => 'array',
             'update_token' => 'encrypted',
             'mail_password' => 'encrypted',
+            'paystack_test_secret_key' => 'encrypted',
+            'paystack_live_secret_key' => 'encrypted',
+            'vapid_private_key' => 'encrypted',
+            'pay_paystack_enabled' => 'boolean',
             'mail_port' => 'integer',
         ];
     }
 
     /** Never sent to the browser. */
-    protected $hidden = ['update_token', 'mail_password'];
+    protected $hidden = ['update_token', 'mail_password', 'paystack_test_secret_key', 'paystack_live_secret_key', 'vapid_private_key'];
 
     /**
      * Payment methods customers can choose at checkout (key => label). WhatsApp
@@ -116,6 +120,7 @@ class BusinessSetting extends Model
             'whatsapp' => $this->pay_whatsapp_enabled && \App\Support\WhatsApp::normalize($this->whatsapp_number),
             'delivery' => $this->pay_on_delivery_enabled,
             'bank_transfer' => $this->pay_bank_transfer_enabled && filled($this->bank_account_number),
+            'paystack' => $this->pay_paystack_enabled && app(\App\Services\Paystack::class)->ready($this),
         ]);
 
         $keys = array_keys($methods) ?: ['delivery'];

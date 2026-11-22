@@ -118,7 +118,7 @@ export function FilterChips({ value, options, onChange, label }) {
  * "⋯" button with a list of actions: a bottom sheet on phones, a small menu on
  * larger screens. `items`: [{ label, icon, onClick?, href?, danger? }, …].
  */
-export function ActionMenu({ items, label = 'More actions' }) {
+export function ActionMenu({ items, label = 'More actions', up = false, triggerClassName = 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900', trigger }) {
     const [open, setOpen] = useState(false);
     const ref = useRef(null);
 
@@ -166,13 +166,13 @@ export function ActionMenu({ items, label = 'More actions' }) {
                 aria-haspopup="menu"
                 aria-expanded={open}
                 aria-label={label}
-                className="flex h-10 w-10 items-center justify-center rounded-full text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900 active:scale-90"
+                className={`flex h-10 min-w-10 items-center justify-center gap-1.5 rounded-full transition active:scale-90 ${trigger ? 'px-3 text-sm font-semibold' : ''} ${triggerClassName}`}
             >
-                <MoreHorizontal size={20} />
+                {trigger ?? <MoreHorizontal size={20} />}
             </button>
             {open && (
                 <>
-                    <div className="absolute top-full right-0 z-30 mt-1 hidden w-52 rounded-xl border border-zinc-200 bg-white p-1 shadow-xl shadow-zinc-900/10 sm:block" role="menu">
+                    <div className={`absolute right-0 z-30 hidden w-56 rounded-xl ${up ? 'bottom-full mb-2' : 'top-full mt-1'} border border-zinc-200 bg-white p-1 shadow-xl shadow-zinc-900/10 sm:block`} role="menu">
                         {list(false)}
                     </div>
                     <Sheet open onClose={() => setOpen(false)} title={label} className="sm:hidden">

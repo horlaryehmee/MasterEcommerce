@@ -9,6 +9,7 @@ use App\Models\Order;
 use App\Services\Cart;
 use App\Services\Coupons;
 use App\Services\OrderMailer;
+use App\Services\Paystack;
 use App\Services\Shipping;
 use App\Services\Stats\Collector;
 use App\Support\Seo;
@@ -71,7 +72,7 @@ class CheckoutController extends StorefrontController
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request): \Symfony\Component\HttpFoundation\Response
     {
         $s = BusinessSetting::current();
         $lines = $this->cart->lines();
@@ -97,7 +98,8 @@ class CheckoutController extends StorefrontController
             // Ticked "same as my phone number" (the default) or a separate WhatsApp number.
             'whatsapp_same' => ['nullable', 'boolean'],
             'customer_whatsapp' => [Rule::requiredIf(! $request->boolean('whatsapp_same', true)), 'nullable', 'string', 'max:40', 'regex:/^\+?[0-9()\-\s.]{7,40}$/'],
-            'customer_email' => ['nullable', 'email', 'max:160'],
+            // Paystack sends the receipt to this address, so it's required for online payment.
+            'customer_email' => ['required_if:payment_method,paystack', 'nullable', 'email:rfc', 'max:160'],
             'country' => ['required', Rule::in(array_keys($countries))],
             'state' => $states !== [] ? ['required', Rule::in(array_keys($states))] : ['nullable', 'string', 'max:80'],
             'city' => [Rule::requiredIf(! $pickup), 'nullable', 'string', 'max:120'],
@@ -116,6 +118,7 @@ class CheckoutController extends StorefrontController
             'city.required' => 'Enter your town or city.',
             'shipping_method.required' => 'Choose a delivery option.',
             'payment_method.in' => 'Choose how you would like to pay.',
+            'customer_email.required_if' => 'Enter your email address to pay online. Your receipt is sent there.',
         ], [
             'customer_name' => 'name',
             'customer_phone' => 'phone number',
@@ -173,6 +176,8 @@ class CheckoutController extends StorefrontController
                 'shipping_method_type' => $rate['type'] ?? null,
                 'notes' => $data['notes'] ?? null,
                 'payment_method' => $data['payment_method'],
+                // Online payment: not an order to fulfil until Paystack confirms the money.
+                'status' => $data['payment_method'] === 'paystack' ? 'awaiting_payment' : 'pending',
                 'subtotal' => $subtotal,
                 'coupon_id' => $applied['coupon']->id ?? null,
                 'coupon_code' => $applied['coupon']->code ?? null,
@@ -204,6 +209,21 @@ class CheckoutController extends StorefrontController
         // Let this browser reopen its own orders.
         $request->session()->push('orders', $order->token);
         $this->mailer->placed($order->load('items'));
+        // Phone notification to the admin (online payments: once paid, from App\Services\Paystack).
+        if ($order->status !== 'awaiting_payment') {
+            app(\App\Services\AdminAlerts::class)->newOrder($order);
+        }
+
+        // Online payment: straight to Paystack's secure page. If it can't start, the
+        // order is still saved and its page offers "Pay now".
+        if ($order->payment_method === 'paystack') {
+            try {
+                // The purchase is tracked (and emails sent) only after the payment succeeds.
+                return \Inertia\Inertia::location(app(Paystack::class)->initialize($order, $request->ip()));
+            } catch (\RuntimeException $e) {
+                return redirect()->route('orders.show', $order->token)->with('error', $e->getMessage());
+            }
+        }
 
         return redirect()->route('orders.show', $order->token)->with('analytics', [Tracking::purchase($order)]);
     }

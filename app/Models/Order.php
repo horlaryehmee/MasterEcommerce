@@ -15,6 +15,8 @@ use Illuminate\Support\Str;
 class Order extends Model
 {
     public const STATUSES = [
+        // Online payment started but not completed: not a sale, nothing to ship.
+        'awaiting_payment' => 'Awaiting payment',
         'pending' => 'New',
         'confirmed' => 'Confirmed',
         'shipped' => 'Out for delivery',
@@ -22,10 +24,17 @@ class Order extends Model
         'cancelled' => 'Cancelled',
     ];
 
+    /** Statuses that don't count as sales (revenue, customer spend, analytics). */
+    public const NOT_SALES = ['cancelled', 'awaiting_payment'];
+
+    /** Unpaid online orders are cancelled after this many hours (frees any coupon use they hold). */
+    public const UNPAID_CANCEL_HOURS = 24;
+
     public const PAYMENT_METHODS = [
         'whatsapp' => 'Confirm on WhatsApp',
         'delivery' => 'Pay on delivery',
         'bank_transfer' => 'Bank transfer',
+        'paystack' => 'Pay online (Paystack)',
     ];
 
     public const PAYMENT_STATUSES = [
@@ -56,6 +65,7 @@ class Order extends Model
             'discount_total' => 'decimal:2',
             'delivery_fee' => 'decimal:2',
             'total' => 'decimal:2',
+            'paid_at' => 'datetime',
         ];
     }
 
@@ -78,6 +88,42 @@ class Order extends Model
     public function items(): HasMany
     {
         return $this->hasMany(OrderItem::class)->orderBy('id');
+    }
+
+    public function payments(): HasMany
+    {
+        return $this->hasMany(Payment::class)->latest('id');
+    }
+
+    /** Paystack order still waiting for its online payment (and still payable). */
+    public function awaitsOnlinePayment(): bool
+    {
+        return $this->payment_method === 'paystack' && $this->payment_status === 'unpaid' && $this->status !== 'cancelled';
+    }
+
+    /**
+     * What the customer should be told about an online payment:
+     * paid | confirming | not_paid | review | cancelled | null (not an online order).
+     */
+    public function onlinePaymentState(): ?string
+    {
+        if ($this->payment_method !== 'paystack') {
+            return null;
+        }
+        if ($this->payment_status === 'paid') {
+            return 'paid';
+        }
+        if ($this->status === 'cancelled') {
+            return 'cancelled';
+        }
+        $latest = $this->payments()->first();
+
+        return match (true) {
+            // A bank transfer can take a few minutes; after 15 the customer may pay again.
+            $latest?->status === 'pending' && $latest->created_at?->gt(now()->subMinutes(15)) => 'confirming',
+            $latest?->status === 'flagged' => 'review',
+            default => 'not_paid',
+        };
     }
 
     public function coupon(): BelongsTo
@@ -118,6 +164,15 @@ class Order extends Model
         if ($term === '') {
             return $query;
         }
+        // Fast paths that use indexes (instant even with 100,000+ orders):
+        // an order number ("#1042", "1042") or a phone number ("0801 234 5678").
+        $digits = preg_replace('/[\s()+\-.#]/', '', $term);
+        if (ctype_digit($digits) && $digits !== '') {
+            return $query->where(fn (Builder $q) => $q
+                ->where('number', 'like', $digits.'%')
+                ->when(strlen($digits) >= 7, fn ($q) => $q->orWhere('customer_key', 'p'.substr($digits, -10))));
+        }
+
         $like = '%'.addcslashes(ltrim($term, '#'), '%_\\').'%';
 
         return $query->where(fn (Builder $q) => $q

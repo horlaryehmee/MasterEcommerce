@@ -1,5 +1,6 @@
 import { Link, router } from '@inertiajs/react';
 import { Users } from 'lucide-react';
+import { BulkBar, SelectAll, SelectRow, useSelection } from '@/Components/Admin/Bulk';
 import { FilterDates, FilterNumber, FilterSelect, ListToolbar, activeFilters, useList } from '@/Components/Admin/ListToolbar';
 import { AdminEmpty, AdminPagination, Badge, Button, FilterChips, PageHeader } from '@/Components/Admin/ui';
 import AdminLayout from '@/Layouts/AdminLayout';
@@ -29,6 +30,7 @@ export default function CustomersIndex({ customers, filters, segments, sorts, co
     });
     const filtered = filters.search || filters.segment || active.length > 0;
     const tabs = [['', 'All', counts['']], ...Object.entries(segments).map(([k, l]) => [k, l, counts[k] ?? 0])];
+    const sel = useSelection(customers.data, 'key');
     const open = (c) => router.visit(`/admin/customers/${c.key}`);
 
     return (
@@ -64,6 +66,9 @@ export default function CustomersIndex({ customers, filters, segments, sorts, co
                         <table className="hidden w-full text-left text-sm md:table">
                             <thead className="border-b border-zinc-100 text-xs font-semibold tracking-wide text-zinc-500 uppercase">
                                 <tr>
+                                    <th className="w-10 py-3 pl-4">
+                                        <SelectAll selection={sel} />
+                                    </th>
                                     <th className="px-4 py-3">Customer</th>
                                     <th className="px-4 py-3">Location</th>
                                     <th className="px-4 py-3 text-right">Orders</th>
@@ -73,7 +78,10 @@ export default function CustomersIndex({ customers, filters, segments, sorts, co
                             </thead>
                             <tbody className="divide-y divide-zinc-100">
                                 {customers.data.map((c) => (
-                                    <tr key={c.key} className="cursor-pointer hover:bg-zinc-50/60" onClick={() => open(c)}>
+                                    <tr key={c.key} className={`cursor-pointer ${sel.has(c.key) ? 'bg-zinc-50' : 'hover:bg-zinc-50/60'}`} onClick={() => open(c)}>
+                                        <td className="py-3 pl-4">
+                                            <SelectRow selection={sel} id={c.key} label={`Select ${c.name}`} />
+                                        </td>
                                         <td className="px-4 py-3">
                                             <span className="flex items-center gap-3">
                                                 <Avatar name={c.name} returning={c.orders_count > 1} />
@@ -107,10 +115,15 @@ export default function CustomersIndex({ customers, filters, segments, sorts, co
                             </tbody>
                         </table>
 
+                        <div className="flex items-center gap-3 border-b border-zinc-100 px-4 py-2.5 md:hidden">
+                            <SelectAll selection={sel} />
+                            <span className="text-xs font-medium text-zinc-500">{sel.count ? `${sel.count} selected` : 'Select all'}</span>
+                        </div>
                         <ul className="divide-y divide-zinc-100 md:hidden">
                             {customers.data.map((c) => (
-                                <li key={c.key}>
-                                    <Link href={`/admin/customers/${c.key}`} className="flex items-center gap-3.5 px-4 py-3.5 transition active:bg-zinc-50">
+                                <li key={c.key} className={`flex items-center pl-4 ${sel.has(c.key) ? 'bg-zinc-50' : ''}`}>
+                                    <SelectRow selection={sel} id={c.key} label={`Select ${c.name}`} />
+                                    <Link href={`/admin/customers/${c.key}`} className="flex min-w-0 flex-1 items-center gap-3.5 py-3.5 pr-4 pl-3 transition active:bg-zinc-50">
                                         <Avatar name={c.name} returning={c.orders_count > 1} />
                                         <span className="min-w-0 flex-1">
                                             <span className="flex items-baseline justify-between gap-2">
@@ -131,6 +144,7 @@ export default function CustomersIndex({ customers, filters, segments, sorts, co
                                 </li>
                             ))}
                         </ul>
+                        <BulkBar selection={sel} noun="customer" exportUrl="/admin/customers/export" exportQuery={list.query()} />
                         <AdminPagination paginator={customers} list={list} />
                     </>
                 )}

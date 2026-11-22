@@ -141,4 +141,45 @@ class OrderEmailsTest extends TestCase
         $this->post('/admin/settings/email/test')->assertSessionHas('success');
         $this->post('/admin/settings/email/test', ['to' => 'not-an-email'])->assertSessionHasErrors('to');
     }
+
+    public function test_emails_are_branded_with_logo_and_product_images(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('public');
+        $disk = \Illuminate\Support\Facades\Storage::disk('public');
+        $png = fn () => (function () {
+            $im = imagecreatetruecolor(400, 400);
+            ob_start();
+            imagewebp($im);
+
+            return ob_get_clean();
+        })();
+        $disk->put('branding/logo.webp', $png());
+        $disk->put('products/kettle.webp', $png());
+        $this->settings(['logo_path' => 'branding/logo.webp', 'primary_color' => '#C2410C']);
+
+        $order = $this->placeOrder();
+        $order->items()->update(['image_path' => 'products/kettle.webp']);
+        $html = (new OrderPlaced($order->fresh()))->render();
+
+        // Logo as PNG (keeps transparency), product photo as JPEG: both work in Outlook, unlike WebP.
+        $this->assertMatchesRegularExpression('#<img src="http[^"]+/storage/email/[a-f0-9]{20}\.png" alt="Kettle Co"#', $html);
+        $this->assertMatchesRegularExpression('#<img src="http[^"]+/storage/email/[a-f0-9]{20}\.jpg"#', $html);
+        $this->assertStringContainsString('#C2410C', $html);
+        $this->assertStringContainsString('Blue Kettle', $html);
+        $this->assertCount(2, $disk->files('email'));
+
+        // No logo: the business name is shown instead.
+        $this->settings(['logo_path' => null]);
+        $this->assertStringContainsString('>Kettle Co</span>', (new OrderPlaced($order->fresh()))->render());
+    }
+
+    public function test_admin_can_preview_the_order_emails(): void
+    {
+        $order = $this->placeOrder();
+        $this->actingAsAdmin();
+
+        $this->get("/admin/orders/{$order->id}/email/placed")->assertOk()->assertSee('Thank you for your order!');
+        $this->get("/admin/orders/{$order->id}/email/owner")->assertOk()->assertSee('New order #'.$order->number);
+        $this->get("/admin/orders/{$order->id}/email/nonsense")->assertNotFound();
+    }
 }

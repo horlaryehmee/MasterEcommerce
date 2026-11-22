@@ -24,9 +24,14 @@ Route::prefix('install')->middleware('throttle:30,1')->group(function () {
 */
 
 Route::prefix('admin')->name('admin.')->group(function () {
+    // Installable admin app (before login too, so the login page can be installed).
+    Route::get('manifest.webmanifest', [\App\Http\Controllers\PwaController::class, 'adminManifest'])->name('manifest');
+
     Route::middleware('guest')->group(function () {
         Route::get('login', [AuthController::class, 'showLogin'])->name('login');
         Route::post('login', [AuthController::class, 'login'])->name('login.store');
+        Route::get('two-factor-challenge', [AuthController::class, 'showTwoFactorChallenge'])->name('two-factor.challenge');
+        Route::post('two-factor-challenge', [AuthController::class, 'twoFactorChallenge'])->middleware('throttle:10,1')->name('two-factor.verify');
         Route::get('forgot-password', [AuthController::class, 'showForgotPassword'])->name('password.request');
         Route::post('forgot-password', [AuthController::class, 'sendResetLink'])->middleware('throttle:5,1')->name('password.email');
         Route::get('reset-password/{token}', [AuthController::class, 'showResetPassword'])->name('password.reset');
@@ -39,6 +44,14 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/', Admin\DashboardController::class)->name('dashboard');
 
         Route::patch('products/{product}/toggle', [Admin\ProductController::class, 'toggle'])->name('products.toggle');
+        // Bulk actions on ticked rows (throttled: each request can touch up to 100 rows).
+        Route::middleware('throttle:30,1')->group(function () {
+            Route::post('products/bulk', [Admin\ProductController::class, 'bulk'])->name('products.bulk');
+            Route::post('categories/bulk', [Admin\CategoryController::class, 'bulk'])->name('categories.bulk');
+            Route::post('coupons/bulk', [Admin\CouponController::class, 'bulk'])->name('coupons.bulk');
+            Route::post('orders/bulk', [Admin\OrderController::class, 'bulk'])->name('orders.bulk');
+            Route::post('analytics/visitors/bulk', [Admin\AnalyticsController::class, 'visitorsBulk'])->name('analytics.visitors.bulk');
+        });
         Route::get('products/export', [Admin\ProductController::class, 'export'])->name('products.export');
         Route::get('categories/export', [Admin\CategoryController::class, 'export'])->name('categories.export');
         Route::resource('products', Admin\ProductController::class)->except('show');
@@ -65,6 +78,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('customers/export', [Admin\CustomerController::class, 'export'])->name('customers.export');
         Route::get('customers/{key}', [Admin\CustomerController::class, 'show'])->where('key', '[pe][0-9a-f]{4,39}')->name('customers.show');
         Route::get('orders/{order}', [Admin\OrderController::class, 'show'])->name('orders.show');
+        Route::get('orders/{order}/email/{type}', [Admin\OrderController::class, 'emailPreview'])->whereIn('type', ['placed', 'owner', 'updated'])->name('orders.email');
         Route::patch('orders/{order}', [Admin\OrderController::class, 'update'])->name('orders.update');
 
         Route::patch('coupons/{coupon}/toggle', [Admin\CouponController::class, 'toggle'])->name('coupons.toggle');
@@ -99,9 +113,23 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('updates/agent/run', [Admin\AgentController::class, 'run'])->name('updates.agent.run');
         Route::post('updates/agent/finish', [Admin\AgentController::class, 'finish'])->name('updates.agent.finish');
 
+        // Phone/desktop notifications, per device.
+        Route::middleware('throttle:20,1')->group(function () {
+            Route::post('push-subscriptions', [Admin\PushController::class, 'store'])->name('push.store');
+            Route::delete('push-subscriptions', [Admin\PushController::class, 'destroy'])->name('push.destroy');
+            Route::post('push-subscriptions/test', [Admin\PushController::class, 'test'])->name('push.test');
+        });
+
         Route::get('profile', [Admin\ProfileController::class, 'edit'])->name('profile.edit');
         Route::put('profile', [Admin\ProfileController::class, 'update'])->name('profile.update');
         Route::put('profile/password', [Admin\ProfileController::class, 'updatePassword'])->name('profile.password');
+        // Two-factor sign-in (each change asks for the current password).
+        Route::middleware('throttle:10,1')->group(function () {
+            Route::post('profile/two-factor', [Admin\ProfileController::class, 'enableTwoFactor'])->name('profile.two-factor.enable');
+            Route::post('profile/two-factor/confirm', [Admin\ProfileController::class, 'confirmTwoFactor'])->name('profile.two-factor.confirm');
+            Route::post('profile/two-factor/recovery-codes', [Admin\ProfileController::class, 'regenerateRecoveryCodes'])->name('profile.two-factor.recovery');
+            Route::delete('profile/two-factor', [Admin\ProfileController::class, 'disableTwoFactor'])->name('profile.two-factor.disable');
+        });
     });
 });
 
@@ -141,6 +169,18 @@ Route::middleware('shop')->group(function () {
 });
 // Customers' order links keep working even if online ordering is later switched off.
 Route::get('order/{token}', [Storefront\OrderController::class, 'show'])->where('token', '[A-Za-z0-9]{40}')->name('orders.show');
+
+// Paystack online payments. Nothing is marked paid until the server has verified it with Paystack.
+Route::post('order/{token}/pay', [Storefront\PaystackController::class, 'pay'])->where('token', '[A-Za-z0-9]{40}')->middleware('throttle:10,1')->name('orders.pay');
+Route::get('payments/paystack/callback', [Storefront\PaystackController::class, 'callback'])->middleware('throttle:30,1')->name('payments.paystack.callback');
+// CSRF-exempt (bootstrap/app.php): authenticated by its HMAC signature instead.
+Route::post('payments/paystack/webhook', [Storefront\PaystackController::class, 'webhook'])->middleware('throttle:120,1')->name('payments.paystack.webhook');
+
+// Installable shop app: manifest, service worker (must be at the root), offline page, fallback icon.
+Route::get('manifest.webmanifest', [\App\Http\Controllers\PwaController::class, 'shopManifest'])->name('pwa.manifest');
+Route::get('sw.js', [\App\Http\Controllers\PwaController::class, 'serviceWorker'])->name('pwa.sw');
+Route::get('offline', [\App\Http\Controllers\PwaController::class, 'offline'])->name('pwa.offline');
+Route::get('pwa/icon/{app}.svg', [\App\Http\Controllers\PwaController::class, 'icon'])->whereIn('app', \App\Support\AppIcon::APPS)->name('pwa.icon');
 
 Route::get('sitemap.xml', [Storefront\SitemapController::class, 'sitemap'])->name('sitemap');
 Route::get('robots.txt', [Storefront\SitemapController::class, 'robots'])->name('robots');

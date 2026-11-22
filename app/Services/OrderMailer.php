@@ -23,6 +23,10 @@ class OrderMailer
     public function placed(Order $order): void
     {
         $s = BusinessSetting::current();
+        // Online payment not completed yet: no "thank you for your order" (sent once paid).
+        if ($order->status === 'awaiting_payment') {
+            return;
+        }
 
         if ($s->email_owner_new_order && ($to = $s->orderNotificationAddress())) {
             $this->send($to, new OrderPlaced($order, true), $order, 'owner');

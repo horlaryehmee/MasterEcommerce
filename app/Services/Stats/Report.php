@@ -115,7 +115,7 @@ class Report
     protected function orders(): array
     {
         $row = DB::table('orders')
-            ->where('status', '!=', 'cancelled')
+            ->whereNotIn('status', \App\Models\Order::NOT_SALES)
             ->whereBetween('created_at', [$this->from->utc(), $this->to->endOfDay()->utc()])
             ->selectRaw('COUNT(*) as count, COALESCE(SUM(total), 0) as revenue')->first();
 

@@ -7,6 +7,8 @@ import { createRoot } from 'react-dom/client';
 import { xsrfCookieName } from './lib/csrf';
 import { trackPageView } from './lib/analytics';
 import { statsPageview } from './lib/stats';
+// Installable app: service worker + install prompt.
+import './lib/pwa';
 
 // Inertia sends the CSRF token from this app's own cookie (see App\Http\Middleware\ValidateCsrfToken).
 axios.defaults.xsrfCookieName = xsrfCookieName();

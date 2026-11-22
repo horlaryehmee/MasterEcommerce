@@ -122,7 +122,8 @@ class ProductController extends Controller
     {
         $filters = $this->filters($request);
         $code = \App\Models\BusinessSetting::current()->currency_code;
-        $query = $this->listQuery($filters)->with(['category:id,name', 'variants']);
+        $query = $this->listQuery($filters)->with(['category:id,name', 'variants'])
+            ->when(AdminList::ids($request), fn ($q, $ids) => $q->whereIn('id', $ids));
 
         $rows = (function () use ($query) {
             foreach ($query->lazy(200) as $p) {
@@ -208,12 +209,63 @@ class ProductController extends Controller
 
     public function destroy(Product $product): RedirectResponse
     {
+        $this->deleteProduct($product);
+
+        return redirect()->route('admin.products.index')->with('success', 'Product deleted.');
+    }
+
+    public const BULK_ACTIONS = ['publish', 'draft', 'feature', 'unfeature', 'new_arrival', 'not_new_arrival', 'availability', 'category', 'delete'];
+
+    /** Bulk actions on the rows ticked in the product list. */
+    public function bulk(Request $request): RedirectResponse
+    {
+        $bulk = AdminList::bulk($request, self::BULK_ACTIONS, ['nullable', 'string', 'max:20']);
+        $value = $bulk['value'];
+
+        if ($bulk['action'] === 'availability' && ! array_key_exists((string) $value, Product::AVAILABILITY)) {
+            throw ValidationException::withMessages(['value' => 'Choose an availability.']);
+        }
+        if ($bulk['action'] === 'category' && $value !== 'none' && ! (ctype_digit((string) $value) && Category::query()->whereKey((int) $value)->exists())) {
+            throw ValidationException::withMessages(['value' => 'Choose a category.']);
+        }
+
+        $products = Product::query()->whereIn('id', $bulk['ids'])->get();
+
+        if ($bulk['action'] === 'delete') {
+            $products->each(fn (Product $p) => $this->deleteProduct($p));
+
+            return back()->with('success', AdminList::count($products->count(), 'product').' deleted.');
+        }
+
+        DB::transaction(function () use ($products, $bulk, $value) {
+            foreach ($products as $p) {
+                match ($bulk['action']) {
+                    'publish' => $p->status = Product::STATUS_PUBLISHED,
+                    'draft' => $p->status = Product::STATUS_DRAFT,
+                    'feature' => $p->is_featured = true,
+                    'unfeature' => $p->is_featured = false,
+                    'new_arrival' => $p->is_new_arrival = true,
+                    'not_new_arrival' => $p->is_new_arrival = false,
+                    'availability' => $p->availability = $value,
+                    'category' => $p->category_id = $value === 'none' ? null : (int) $value,
+                };
+                // Variable products take availability from their options.
+                if ($bulk['action'] === 'availability' && $p->has_variants) {
+                    $p->variants()->update(['availability' => $value]);
+                }
+                $p->save();
+            }
+        });
+
+        return back()->with('success', AdminList::count($products->count(), 'product').' updated.');
+    }
+
+    protected function deleteProduct(Product $product): void
+    {
         $paths = $product->images()->pluck('path');
         $product->delete();
         // Remove files only after the database row is gone.
         $paths->each(fn ($path) => $this->images->delete($path));
-
-        return redirect()->route('admin.products.index')->with('success', 'Product deleted.');
     }
 
     protected function attributes(ProductRequest $request): array

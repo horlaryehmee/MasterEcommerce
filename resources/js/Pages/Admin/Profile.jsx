@@ -1,8 +1,10 @@
 import { useForm } from '@inertiajs/react';
 import { Button, Card, FormActions, PageHeader, TextInput } from '@/Components/Admin/ui';
+import NotificationsCard from '@/Components/Admin/Notifications';
+import TwoFactorCard from '@/Components/Admin/TwoFactor';
 import AdminLayout from '@/Layouts/AdminLayout';
 
-export default function Profile({ profile }) {
+export default function Profile({ profile, twoFactor, recoveryCodes, push }) {
     const details = useForm({ name: profile.name, email: profile.email });
     const password = useForm({ current_password: '', password: '', password_confirmation: '' });
 
@@ -46,6 +48,10 @@ export default function Profile({ profile }) {
                         </FormActions>
                     </Card>
                 </form>
+
+                <NotificationsCard push={push} />
+
+                <TwoFactorCard twoFactor={twoFactor} recoveryCodes={recoveryCodes} />
             </div>
         </AdminLayout>
     );

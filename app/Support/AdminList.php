@@ -78,6 +78,50 @@ class AdminList
             ->when($end, fn ($q) => $q->where($column, '<=', $end));
     }
 
+    /**
+     * Rows ticked in a list, for "Export selected": ?ids=3,8,12 (or ids[]=…).
+     * Anything that doesn't match $pattern is dropped; at most the largest page size.
+     *
+     * @return array<int, int|string>
+     */
+    public static function ids(Request $request, string $pattern = '/^[1-9]\d{0,18}$/'): array
+    {
+        $raw = $request->query('ids', $request->input('ids', []));
+        $raw = is_array($raw) ? $raw : explode(',', (string) $raw);
+        $ids = array_values(array_unique(array_filter(array_map(fn ($v) => trim((string) $v), $raw), fn ($v) => preg_match($pattern, $v) === 1)));
+        $ids = array_slice($ids, 0, max(self::PER_PAGE));
+
+        return $pattern === '/^[1-9]\d{0,18}$/' ? array_map('intval', $ids) : $ids;
+    }
+
+    /**
+     * Validates a bulk action posted from a list: { action, ids: [...], value? }.
+     *
+     * @param  array<int, string>  $actions  allowed action names
+     * @param  array  $value  rules for the optional value (e.g. the category to move products to)
+     * @return array{action: string, ids: array<int, int|string>, value: mixed}
+     */
+    public static function bulk(Request $request, array $actions, array $value = ['nullable'], array $idRules = ['integer', 'min:1']): array
+    {
+        $data = $request->validate([
+            'action' => ['required', 'string', \Illuminate\Validation\Rule::in($actions)],
+            'ids' => ['required', 'array', 'min:1', 'max:'.max(self::PER_PAGE)],
+            'ids.*' => ['required', 'distinct', ...$idRules],
+            'value' => $value,
+        ], [
+            'ids.required' => 'Select at least one row first.',
+            'ids.max' => 'Select at most '.max(self::PER_PAGE).' rows at a time.',
+        ]);
+
+        return ['action' => $data['action'], 'ids' => $data['ids'], 'value' => $data['value'] ?? null];
+    }
+
+    /** "3 products" */
+    public static function count(int $n, string $noun): string
+    {
+        return $n.' '.\Illuminate\Support\Str::plural($noun, $n);
+    }
+
     /** A date in the store's timezone for display and exports. */
     public static function localDate($value, string $format = 'Y-m-d H:i'): string
     {

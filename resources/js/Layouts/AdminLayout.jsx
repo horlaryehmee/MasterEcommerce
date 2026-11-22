@@ -1,4 +1,5 @@
 import { Head, Link, router, usePage } from '@inertiajs/react';
+import { InstallApp } from '@/Components/InstallApp';
 import {
     BarChart3,
     CheckCircle2,
@@ -9,6 +10,7 @@ import {
     LayoutGrid,
     LayoutTemplate,
     LogOut,
+    MonitorDown,
     Package,
     PanelsTopLeft,
     RefreshCw,
@@ -126,6 +128,13 @@ function Sidebar() {
                         </Link>
                     );
                 })}
+                <InstallApp name="the admin app" always>
+                    {(install) => (
+                        <button type="button" onClick={install} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900">
+                            <MonitorDown size={18} /> Install admin app
+                        </button>
+                    )}
+                </InstallApp>
                 <button
                     type="button"
                     onClick={() => router.post('/admin/logout')}
@@ -246,6 +255,23 @@ function MoreSheet({ open, onClose }) {
                     );
                 })}
             </ul>
+            <InstallApp name="the admin app" always>
+                {(install) => (
+                    <button
+                        type="button"
+                        onClick={install}
+                        className="mt-1 flex w-full items-center gap-3.5 rounded-2xl bg-zinc-900 px-3 py-3 text-left text-white transition active:scale-[0.98]"
+                    >
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/15">
+                            <MonitorDown size={19} />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                            <span className="block text-[15px] font-medium">Install admin app</span>
+                            <span className="block truncate text-xs text-white/70">Open your dashboard from your home screen</span>
+                        </span>
+                    </button>
+                )}
+            </InstallApp>
             <div className="mt-2 grid grid-cols-2 gap-2 border-t border-zinc-100 pt-3 pb-1">
                 <a href="/" target="_blank" rel="noopener noreferrer" className="flex h-12 items-center justify-center gap-2 rounded-xl bg-zinc-100 text-sm font-semibold text-zinc-800 transition active:scale-[0.97]">
                     <ExternalLink size={16} /> View website
@@ -292,9 +318,33 @@ function AppBar({ title }) {
     );
 }
 
+/** Every admin page, while Paystack runs on test keys: payments aren't real yet. */
+function PaystackTestBanner() {
+    const { admin } = usePage().props;
+    if (!admin?.paystack_test_mode) return null;
+    return (
+        <div role="alert" className="border-b border-amber-300 bg-amber-100 px-4 py-2.5 text-sm text-amber-950 sm:px-6 lg:px-8">
+            <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-3 gap-y-1">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500 px-2 py-0.5 text-xs font-bold tracking-wide text-white uppercase">Test mode</span>
+                <span className="min-w-0 flex-1">Paystack is in test mode: customers can’t really pay, and no money reaches your account.</span>
+                <Link href="/admin/settings?tab=shop" className="font-semibold underline underline-offset-2">
+                    Switch to live
+                </Link>
+            </div>
+        </div>
+    );
+}
+
 export default function AdminLayout({ title, children }) {
     const [moreOpen, setMoreOpen] = useState(false);
-    const { brand } = usePage().props;
+    const { brand, admin } = usePage().props;
+
+    // Installed app: new orders waiting, as a number on the app icon.
+    useEffect(() => {
+        if (!('setAppBadge' in navigator)) return;
+        const n = admin?.new_orders ?? 0;
+        (n > 0 ? navigator.setAppBadge(n) : navigator.clearAppBadge()).catch(() => {});
+    }, [admin?.new_orders]);
     const { url } = usePage();
     const path = url.split('?')[0];
 
@@ -310,6 +360,7 @@ export default function AdminLayout({ title, children }) {
 
             <div className="lg:pl-64">
                 <AppBar title={title || 'Admin'} />
+                <PaystackTestBanner />
                 {/* Re-keyed per page (not per query string) so each page eases in. */}
                 <main key={path} className="mx-auto max-w-6xl animate-page-in px-4 pt-3 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:px-6 sm:pt-6 lg:px-8 lg:py-8 motion-reduce:animate-none">
                     {children}

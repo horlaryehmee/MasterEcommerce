@@ -4,6 +4,7 @@ namespace App\Mail;
 
 use App\Models\BusinessSetting;
 use App\Models\Order;
+use App\Mail\Concerns\BrandedEmail;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Address;
@@ -17,7 +18,7 @@ use Illuminate\Queue\SerializesModels;
  */
 class OrderUpdated extends Mailable
 {
-    use Queueable, SerializesModels;
+    use BrandedEmail, Queueable, SerializesModels;
 
     /** Events that email the customer: "status.confirmed", "payment.paid", ... */
     public const EVENTS = [
@@ -41,11 +42,14 @@ class OrderUpdated extends Mailable
 
     public function content(): Content
     {
-        return new Content(markdown: 'mail.order-updated', with: [
+        return new Content(view: 'mail.order-updated', text: 'mail.order-updated-text', with: [
             'detail' => $this->order->loadMissing('items')->toDetail(),
+            'items' => $this->emailItems($this->order),
+            'brand' => $this->brand(),
+            'event' => $this->event,
             'settings' => BusinessSetting::current(),
             'headline' => $this->headline(),
-            'message' => $this->message(),
+            'intro' => $this->message(),
             'orderUrl' => $this->order->url(),
         ]);
     }
