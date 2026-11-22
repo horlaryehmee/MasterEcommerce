@@ -13,26 +13,11 @@ class DefaultPageContent
     {
         return match ($slug) {
             'about' => <<<'MD'
-{business_name} was started with a simple idea: buying quality products should be easy, honest and personal.
-
 ## Our story
 
-We know how frustrating it can be to shop online and receive something that looks nothing like the picture, or to send a message and never hear back. So we decided to do things differently.
+{business_name} was started with a simple idea: buying quality products should be easy, honest and personal. We know how frustrating it can be to shop online and receive something that looks nothing like the picture, or to send a message and never hear back. So we decided to do things differently.
 
 Every product in our catalogue is carefully chosen and checked before it's offered to you, and every customer gets a real conversation with a real person — not a faceless checkout page.
-
-## What we offer
-
-- A carefully selected range of products, with clear photos and descriptions
-- Honest, up-to-date prices
-- Friendly advice to help you choose the right item
-- Convenient delivery and pick-up options
-
-## Our promise
-
-Quality you can trust, prices that are fair and service you can count on. If something isn't right, talk to us — we'll do our best to make it right.
-
-Thank you for choosing {business_name}.
 MD,
             'contact' => <<<'MD'
 We'd love to hear from you. The fastest way to reach us is on **WhatsApp** — tap the button on this page and we'll reply as soon as possible.

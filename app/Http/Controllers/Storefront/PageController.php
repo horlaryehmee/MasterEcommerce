@@ -53,12 +53,10 @@ class PageController extends StorefrontController
         // "Our values" reuses the homepage "Why choose us" points, so they're edited in one place.
         $values = collect($home->why_items ?? [])->filter(fn ($i) => filled($i['title'] ?? null))->values();
 
-        $categories = Category::query()->published()->ordered()
-            ->withCount(['products as published_products_count' => fn ($q) => $q->published()])
-            ->limit(5)->get();
+        // The photo beside the story: the first category that has one.
+        $category = Category::query()->published()->ordered()->whereNotNull('image_path')->first();
 
-        $stats = collect($page->extras['stats'] ?? [])->filter(fn ($s) => filled($s['value'] ?? null) && filled($s['label'] ?? null))->values();
-        $quote = $page->extras['quote'] ?? [];
+        $stats = collect($page->extras['stats'] ?? [])->filter(fn ($s) => filled($s['value'] ?? null) && filled($s['label'] ?? null))->take(3)->values();
 
         return $this->page('Storefront/About', [
             'page' => $base + [
@@ -71,14 +69,12 @@ class PageController extends StorefrontController
                 'subheading' => $home->why_subheading,
                 'items' => $values,
             ],
-            'categories' => $categories->map->toCard()->values(),
-            'contact' => $this->contact($settings),
-            'stats' => $stats->all(),
-            'quote' => filled($quote['text'] ?? null) ? [
-                'text' => $this->fill($quote['text'], $settings),
-                'name' => $quote['name'] ?? null,
-                'role' => $quote['role'] ?? null,
+            'collection' => $category ? [
+                'name' => $category->name,
+                'url' => route('categories.show', $category->slug),
+                'image' => Media::image($category->image_path, $category->name),
             ] : null,
+            'stats' => $stats->all(),
         ], $seo->image(Media::url($imagePath)));
     }
 

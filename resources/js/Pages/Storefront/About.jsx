@@ -1,152 +1,101 @@
 import { Link, usePage } from '@inertiajs/react';
-import { useMemo } from 'react';
-import { ArrowUpRight, BadgeCheck, Clock, Mail, MapPin, Phone } from 'lucide-react';
-import { WHY_ICONS } from '@/Components/Store/Home/WhyChooseUs';
+import { ArrowRight } from 'lucide-react';
 import Img from '@/Components/Store/Img';
-import WhatsAppButton from '@/Components/Store/WhatsAppButton';
 import StoreLayout from '@/Layouts/StoreLayout';
 import './about.css';
 
-function splitAboutContent(html) {
-    const story = document.createElement('template');
-    story.innerHTML = html || '';
-    const sections = [];
+const WIDTH = 'mx-auto max-w-7xl px-5 sm:px-6 md:px-12';
+const PILL = 'inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-semibold transition-colors';
 
-    // Move the named Markdown sections intact, including any lists and subheadings.
-    for (const heading of story.content.querySelectorAll('h2')) {
-        if (heading.parentNode !== story.content || !/^(what we offer|our promise)$/i.test(heading.textContent.trim())) continue;
-        const section = document.createElement('template');
-        let node = heading;
-        do {
-            const next = node.nextSibling;
-            section.content.append(node);
-            node = next;
-        } while (node && !node.matches?.('h1, h2'));
-        sections.push(section.innerHTML);
-    }
-
-    return { storyHtml: story.innerHTML.trim(), sections };
-}
-
-export default function About({ page, values, contact, categories = [], stats = [], quote }) {
+export default function About({ page, values, collection, stats = [] }) {
     const { brand } = usePage().props;
-    const { storyHtml, sections } = useMemo(() => splitAboutContent(page.content_html), [page.content_html]);
-    const collection = categories.find(category => category.image?.src && category.url);
-    const details = [
-        ['Email', Mail, contact.email, contact.email && `mailto:${contact.email}`],
-        ['Phone', Phone, contact.phone, contact.phone && `tel:${contact.phone.replace(/[^\d+]/g, '')}`],
-        ['Address', MapPin, contact.address],
-        ['Opening hours', Clock, contact.opening_hours],
-    ].filter(([, , value]) => value);
-
-    const founderNote = quote && (
-        <blockquote className="profile-note mt-5 rounded-r-lg border-l-2 border-brand px-5 py-4">
-            <p className="leading-relaxed">&ldquo;{quote.text}&rdquo;</p>
-            {(quote.name || quote.role) && <footer className="mt-2 text-sm text-stone-600">{[quote.name, quote.role].filter(Boolean).join(', ')}</footer>}
-        </blockquote>
-    );
+    const heading = page.headline || brand.name || page.title;
+    const hasStory = Boolean(page.content_html?.trim());
 
     return (
         <StoreLayout>
-            <article className="about-profile">
-                <header className={'profile-cover' + (page.image?.src ? ' has-image' : '')}>
-                    {page.image?.src && <Img image={page.image} alt="" eager sizes="(min-width: 768px) 70vw, 100vw" className="profile-cover-image" />}
-                    <div className="profile-width profile-cover-copy">
-                        {brand.name && page.title !== brand.name && <p className="mb-3 text-sm font-medium">{page.title}</p>}
-                        <h1 className="max-w-[18ch] text-[clamp(2.7rem,5vw,5rem)] leading-[1.04] font-semibold tracking-[-0.045em]">{brand.name || page.title}</h1>
-                        {page.intro && <p className="mt-4 max-w-[41ch] text-base leading-relaxed sm:text-lg">{page.intro}</p>}
+            <article className="about-page text-stone-900">
+                {/* Centred opening: label, statement, introduction, two buttons, then one wide photo. */}
+                <header className={`${WIDTH} pt-12 pb-12 md:pt-24`}>
+                    <div className="mx-auto mb-10 flex max-w-3xl flex-col items-center gap-5 text-center md:mb-16">
+                        <span className="text-xs font-semibold tracking-[0.14em] text-stone-500 uppercase">{page.title}</span>
+                        <h1 className="text-[2rem] leading-[1.18] font-semibold tracking-[-0.02em] text-balance md:text-[3.5rem] md:leading-[1.1] md:tracking-[-0.035em]">
+                            {heading}
+                        </h1>
+                        {page.intro && <p className="max-w-prose text-lg leading-relaxed text-pretty text-stone-600">{page.intro}</p>}
+                        <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+                            <Link href="/products" className={`${PILL} bg-brand text-on-brand hover:opacity-90`}>Shop now</Link>
+                            {hasStory && <a href="#our-story" className={`${PILL} border border-stone-300 hover:bg-stone-50`}>Read our story</a>}
+                        </div>
                     </div>
+                    {page.image?.src && (
+                        <figure className="overflow-hidden rounded-[10px] bg-stone-100">
+                            <Img image={page.image} alt={page.image.alt || ''} eager sizes="(min-width: 1280px) 1184px, 100vw" className="aspect-[4/3] w-full object-cover sm:aspect-[16/9]" />
+                        </figure>
+                    )}
                 </header>
 
-                <div className="profile-width profile-body">
-                    {stats.length > 0 && (
-                        <dl aria-label="Business figures" className="profile-facts">
-                            {stats.map((stat, index) => (
-                                <div key={index} className="flex flex-col rounded-xl border border-stone-200 px-4 py-3 sm:px-5">
-                                    <dt className="mt-1 text-sm text-stone-600">{stat.label}</dt>
-                                    <dd className="order-first text-2xl font-semibold tracking-tight">{stat.value}</dd>
-                                </div>
-                            ))}
-                        </dl>
-                    )}
-
-                    {(storyHtml || (!sections.length && quote)) && (
-                        <section id="our-story" aria-label="Our story" className="profile-story-layout">
-                            <div className="min-w-0 max-w-[66ch]">
-                                {page.headline && <h2 className="profile-heading mb-4">{page.headline}</h2>}
-                                {storyHtml && <div className="profile-story rich-text" dangerouslySetInnerHTML={{ __html: storyHtml }} />}
-                                {sections.length === 0 && founderNote}
-                            </div>
+                {/* Story beside a photo, with the headline numbers underneath. */}
+                {(hasStory || stats.length > 0) && (
+                    <section id="our-story" aria-label="Our story" className={`${WIDTH} scroll-mt-24 py-12 md:py-24`}>
+                        <div className={`grid grid-cols-1 items-center gap-10 md:gap-16 ${collection ? 'md:grid-cols-12' : ''}`}>
                             {collection && (
-                                <Link href={collection.url} className="profile-photo group block overflow-hidden rounded-xl border border-stone-200">
-                                    <Img image={collection.image} alt="" sizes="(min-width: 960px) 28vw, 90vw" className="aspect-[2.5] w-full object-cover md:aspect-square" />
-                                    <span className="flex items-center justify-between gap-3 px-4 py-3 text-sm font-semibold sm:px-5">
-                                        <span className="group-hover:underline">Explore {collection.name}</span>
-                                        <ArrowUpRight size={17} aria-hidden />
-                                    </span>
+                                <Link href={collection.url} className="group block md:col-span-6" aria-label={`Explore ${collection.name}`}>
+                                    <figure className="overflow-hidden rounded-[10px] bg-stone-100">
+                                        <Img image={collection.image} alt="" sizes="(min-width: 768px) 45vw, 100vw"
+                                            className="aspect-[4/3] w-full object-cover transition-transform duration-500 group-hover:scale-[1.02]" />
+                                    </figure>
                                 </Link>
                             )}
-                        </section>
-                    )}
-
-                    {sections.length > 0 && (
-                        <section id="offer-and-promise" aria-label="What we offer and our promise" className="border-y border-stone-200 py-6 sm:py-8">
-                            <div className={`grid gap-5 md:gap-12 ${sections.length > 1 ? 'md:grid-cols-2' : ''}`}>
-                                {sections.map((html, index) => (
-                                    <div key={index} className="rich-text min-w-0 [&>h2:first-child]:mt-0 [&>h2:first-child]:mb-3 [&>:last-child]:mb-0"
-                                        dangerouslySetInnerHTML={{ __html: html }} />
-                                ))}
-                            </div>
-                            {founderNote}
-                        </section>
-                    )}
-
-                    {values && (
-                        <section id="values" aria-labelledby="values-heading">
-                            <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-2">
-                                <h2 id="values-heading" className="profile-heading">{values.heading}</h2>
-                                {values.subheading && <p className="max-w-md text-sm leading-relaxed text-stone-600">{values.subheading}</p>}
-                            </div>
-                            <dl className="profile-values">
-                                {values.items.map((item, index) => {
-                                    const Icon = WHY_ICONS[item.icon] || BadgeCheck;
-                                    return (
-                                        <div key={index} className="rounded-xl border border-stone-200 p-4 sm:p-5">
-                                            <dt className="flex items-center gap-3 font-semibold md:block">
-                                                <Icon size={21} className="shrink-0 md:mb-4" strokeWidth={1.6} aria-hidden />{item.title}
-                                            </dt>
-                                            {item.text && <dd className="mt-2 text-sm leading-relaxed text-stone-600">{item.text}</dd>}
-                                        </div>
-                                    );
-                                })}
-                            </dl>
-                        </section>
-                    )}
-
-                    <section id="contact" aria-labelledby="contact-heading" className="profile-contact">
-                        <div>
-                            <h2 id="contact-heading" className="profile-heading">Get in touch</h2>
-                            <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2">
-                                <WhatsAppButton />
-                                <Link href="/products" className="inline-flex min-h-11 items-center gap-1 text-sm font-semibold hover:underline">
-                                    Browse products <ArrowUpRight size={15} aria-hidden />
-                                </Link>
+                            <div className={`flex min-w-0 flex-col gap-6 ${collection ? 'md:col-span-6' : 'mx-auto max-w-3xl'}`}>
+                                {hasStory && <div className="about-story max-w-prose" dangerouslySetInnerHTML={{ __html: page.content_html }} />}
+                                {stats.length > 0 && (
+                                    <dl className={`grid gap-6 border-t border-stone-200 pt-6 ${stats.length === 1 ? 'grid-cols-1' : stats.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+                                        {stats.map((stat, index) => (
+                                            <div key={index} className="flex min-w-0 flex-col gap-1">
+                                                <dt className="text-xs font-semibold tracking-wide text-stone-500">{stat.label}</dt>
+                                                <dd className="font-heading order-first text-2xl font-semibold tracking-tight tabular-nums">{stat.value}</dd>
+                                            </div>
+                                        ))}
+                                    </dl>
+                                )}
                             </div>
                         </div>
-                        {details.length > 0 && (
-                            <dl className="grid min-w-0 gap-x-6 gap-y-4 rounded-xl border border-stone-200 bg-white p-5 sm:grid-cols-2">
-                                {details.map(([label, Icon, value, href]) => (
-                                    <div key={label} className="min-w-0">
-                                        <dt className="flex items-center gap-2 text-sm font-semibold"><Icon size={16} aria-hidden />{label}</dt>
-                                        <dd className="mt-1 whitespace-pre-line text-sm leading-relaxed text-stone-700">
-                                            {href ? <a className="underline decoration-stone-300 underline-offset-4 hover:decoration-current" href={href}>{value}</a> : value}
-                                        </dd>
+                    </section>
+                )}
+
+                {/* Value pillars on a soft band. */}
+                {values && (
+                    <section aria-labelledby="values-heading" className="border-y border-stone-200 bg-stone-50">
+                        <div className={`${WIDTH} flex flex-col gap-10 py-16 md:py-24`}>
+                            <div className="flex max-w-xl flex-col gap-2">
+                                <h2 id="values-heading" className="text-[1.65rem] leading-tight font-semibold tracking-[-0.01em] text-balance md:text-[2.25rem]">{values.heading}</h2>
+                                {values.subheading && <p className="leading-relaxed text-stone-600">{values.subheading}</p>}
+                            </div>
+                            <div className={`grid grid-cols-1 items-stretch gap-6 sm:grid-cols-2 ${values.items.length % 4 === 0 ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
+                                {values.items.map((item, index) => (
+                                    <div key={index} className="flex flex-col gap-3 rounded-[10px] border border-stone-200 bg-white p-6 md:p-8">
+                                        <h3 className="text-lg font-semibold">{item.title}</h3>
+                                        {item.text && <p className="leading-relaxed text-pretty text-stone-600">{item.text}</p>}
                                     </div>
                                 ))}
-                            </dl>
-                        )}
+                            </div>
+                        </div>
                     </section>
-                </div>
+                )}
+
+                {/* Closing call to action in the brand colour. */}
+                <section aria-labelledby="explore-heading" className={`${WIDTH} py-16 md:py-20`}>
+                    <div className="flex flex-col items-start justify-between gap-8 rounded-[10px] bg-brand px-6 py-12 text-on-brand sm:px-8 md:flex-row md:items-center md:px-12 md:py-16">
+                        <div className="flex max-w-xl flex-col gap-2">
+                            <h2 id="explore-heading" className="text-[1.65rem] leading-tight font-semibold tracking-[-0.01em] text-balance md:text-[2.25rem]">Ready to explore the store?</h2>
+                            <p className="text-lg leading-relaxed text-pretty opacity-75">See everything we have, with clear photos and honest prices.</p>
+                        </div>
+                        <Link href="/products" className={`${PILL} shrink-0 bg-white px-7 text-stone-900 hover:bg-stone-100`}>
+                            Browse products <ArrowRight size={17} aria-hidden />
+                        </Link>
+                    </div>
+                </section>
             </article>
         </StoreLayout>
     );

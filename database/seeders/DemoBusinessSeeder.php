@@ -22,18 +22,12 @@ class DemoBusinessSeeder extends Seeder
             return;
         }
 
-        // About page: sample headline numbers and a founder's note (client sites start without them).
+        // About page: sample headline numbers (client sites start without them).
         \App\Models\Page::query()->where('slug', 'about')->whereNull('extras')->update(['extras' => json_encode([
             'stats' => [
-                ['value' => '8+', 'label' => 'Years in business'],
                 ['value' => '12,000+', 'label' => 'Happy customers'],
+                ['value' => '4.9 / 5', 'label' => 'Average rating'],
                 ['value' => '24h', 'label' => 'Lagos delivery'],
-                ['value' => '4.9★', 'label' => 'Average rating'],
-            ],
-            'quote' => [
-                'text' => 'We started with one promise: sell only what we would happily buy ourselves, and answer every message like it came from a friend. That promise still guides every order.',
-                'name' => 'Ada Okafor',
-                'role' => 'Founder',
             ],
         ])]);
 

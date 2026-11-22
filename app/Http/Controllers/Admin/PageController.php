@@ -25,8 +25,7 @@ class PageController extends Controller
                 ...$page->only('id', 'slug', 'title', 'content', 'is_published', 'seo_title', 'seo_description'),
                 'url' => $page->url(),
                 'faq_items' => $page->faq_items ?? [],
-                'stats' => $page->extras['stats'] ?? [],
-                'quote' => ($page->extras['quote'] ?? []) + ['text' => '', 'name' => '', 'role' => ''],
+                'stats' => array_slice($page->extras['stats'] ?? [], 0, 3),
                 'image_url' => Media::url($page->image_path, 'sm'),
             ],
             // Extra editors shown only where the page layout uses them.
@@ -59,14 +58,10 @@ class PageController extends Controller
             $rules += [
                 'image' => ['nullable', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:'.config('catalog.max_upload_kb'), 'dimensions:max_width=8000,max_height=8000'],
                 'remove_image' => ['nullable', 'boolean'],
-                // Headline numbers ("8+ years", "5,000+ customers") and a founder's note.
-                'stats' => ['nullable', 'array', 'max:4'],
+                // Headline numbers ("5,000+ customers", "4.9 / 5 rating") shown beside the story.
+                'stats' => ['nullable', 'array', 'max:3'],
                 'stats.*.value' => ['required', 'string', 'max:20'],
                 'stats.*.label' => ['required', 'string', 'max:60'],
-                'quote' => ['nullable', 'array'],
-                'quote.text' => ['nullable', 'string', 'max:600'],
-                'quote.name' => ['nullable', 'string', 'max:80'],
-                'quote.role' => ['nullable', 'string', 'max:80'],
             ];
         }
 
@@ -80,9 +75,8 @@ class PageController extends Controller
         if ($page->slug === 'about') {
             $data['extras'] = [
                 'stats' => collect($data['stats'] ?? [])->map(fn ($s) => ['value' => trim($s['value']), 'label' => trim($s['label'])])->values()->all(),
-                'quote' => collect($data['quote'] ?? [])->only('text', 'name', 'role')->map(fn ($v) => trim((string) $v))->all(),
             ];
-            unset($data['stats'], $data['quote']);
+            unset($data['stats']);
         }
 
         if ($page->slug === 'faq') {

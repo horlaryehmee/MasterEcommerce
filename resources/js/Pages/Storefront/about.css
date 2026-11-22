@@ -1,149 +1,72 @@
-.about-profile {
-    color: #1c1917;
+/* About page. Colours and fonts come from the shop's branding. */
+.about-page {
     overflow-wrap: anywhere;
 }
 
-.profile-width {
-    width: min(calc(100% - 2.5rem), 70rem);
-    margin-inline: auto;
+/* Story text written in Admin → Pages (Markdown). */
+.about-story {
+    color: #57534e;
+    line-height: 1.65;
 }
 
-.profile-cover {
-    position: relative;
-    isolation: isolate;
-    background: var(--brand-primary);
-    color: var(--brand-on-primary);
+.about-story > * + * {
+    margin-top: 1rem;
 }
 
-.profile-cover.has-image {
-    background: #181a1c;
-    color: white;
-}
-
-.profile-cover-image {
-    display: block;
-    width: 100%;
-    aspect-ratio: 2.55;
-    object-fit: cover;
-    object-position: center 75%;
-}
-
-.profile-cover-copy {
-    padding-block: 2rem 2.25rem;
-}
-
-@media (min-width: 48rem) {
-    .profile-width {
-        width: min(88%, 70rem);
-    }
-
-    .profile-cover-image {
-        position: absolute;
-        inset: 0 0 0 auto;
-        width: 70%;
-        height: 100%;
-    }
-
-    .profile-cover.has-image::after {
-        content: '';
-        position: absolute;
-        inset: 0;
-        background: linear-gradient(90deg, #181a1c 30%, rgb(24 26 28 / 93%) 40%, transparent 80%);
-    }
-
-    .profile-cover-copy {
-        position: relative;
-        z-index: 1;
-        padding-block: clamp(3rem, 6vw, 6rem);
-    }
-
-    .profile-cover-copy > * {
-        max-width: min(42%, 27rem);
-    }
-}
-
-.profile-body {
-    --profile-tint: color-mix(in srgb, var(--brand-secondary) 38%, white);
-    display: grid;
-    gap: clamp(2rem, 4vw, 3.5rem);
-    padding-block: clamp(1.25rem, 3vw, 2.5rem);
-}
-
-.profile-body section {
-    scroll-margin-top: 7rem;
-}
-
-.profile-facts,
-.profile-values {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
-    gap: .75rem;
-}
-
-.profile-facts {
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 8.5rem), 1fr));
-}
-
-.profile-values {
-    margin-top: 1.25rem;
-}
-
-.profile-facts > div,
-.profile-values > div,
-.profile-note {
-    background: var(--profile-tint);
-}
-
-.profile-values > div:nth-child(even) {
-    background: #f7f8f9;
-}
-
-.profile-heading {
-    font-size: clamp(1.65rem, 3vw, 2.45rem);
+.about-story h2 {
+    margin-top: 2rem;
+    color: #1c1917;
+    font-family: var(--brand-font-heading, inherit);
+    font-size: clamp(1.65rem, 3.2vw, 2.25rem);
     font-weight: 600;
-    line-height: 1.15;
-    letter-spacing: -.035em;
+    letter-spacing: -.01em;
+    line-height: 1.22;
+    text-wrap: balance;
 }
 
-.profile-story-layout,
-.profile-contact {
-    display: grid;
-    align-items: start;
-    gap: 1.5rem;
+.about-story h2 + * {
+    margin-top: 1.5rem;
 }
 
-.profile-photo {
-    background: #f7f8f9;
+.about-story h3 {
+    margin-top: 1.75rem;
+    color: #1c1917;
+    font-size: 1.15rem;
+    font-weight: 600;
 }
 
-.profile-story > :first-child {
+.about-story > :first-child {
     margin-top: 0;
 }
 
-.profile-story > :last-child {
-    margin-bottom: 0;
+.about-story ul,
+.about-story ol {
+    padding-left: 1.25rem;
 }
 
-.profile-story :is(h2, h3) {
-    margin-block: 1.15em .45em;
-    font-size: 1.25rem;
+.about-story ul {
+    list-style: disc;
 }
 
-.profile-contact {
-    padding: clamp(1.25rem, 3vw, 2.5rem);
-    border: 1px solid #e4e4e2;
-    border-radius: 1rem;
-    background: color-mix(in srgb, var(--brand-primary) 5%, white);
+.about-story ol {
+    list-style: decimal;
 }
 
-@media (min-width: 48rem) {
-    .profile-story-layout:has(.profile-photo) {
-        grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
-        gap: clamp(2rem, 5vw, 5rem);
-    }
+.about-story li + li {
+    margin-top: .4rem;
+}
 
-    .profile-contact:has(dl) {
-        grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr);
-        align-items: center;
-    }
+.about-story a {
+    color: #1c1917;
+    text-decoration: underline;
+    text-decoration-color: #d6d3d1;
+    text-underline-offset: 4px;
+}
+
+.about-story a:hover {
+    text-decoration-color: currentColor;
+}
+
+.about-story strong {
+    color: #1c1917;
 }

@@ -30,13 +30,14 @@ class AboutAndFaqPagesTest extends TestCase
         ]);
     }
 
-    public function test_about_page_has_story_values_collections_and_contact(): void
+    public function test_about_page_has_story_values_and_a_category_photo(): void
     {
         HomepageSetting::current()->update([
             'why_heading' => 'Our values',
             'why_items' => [['icon' => 'heart', 'title' => 'Care', 'text' => 'We care.'], ['icon' => 'star', 'title' => '', 'text' => 'ignored']],
         ]);
-        Category::factory()->count(5)->create();
+        Category::factory()->count(2)->create(['image_path' => null]);
+        $photo = Category::factory()->create(['image_path' => 'categories/lamps.webp', 'name' => 'Lamps']);
 
         $this->get('/about')->assertOk()->assertInertia(fn (Assert $p) => $p
             ->component('Storefront/About')
@@ -45,8 +46,8 @@ class AboutAndFaqPagesTest extends TestCase
             ->where('page.content_html', fn ($h) => str_contains($h, 'Ada Lighting') && str_contains($h, '<h2>Our story</h2>'))
             ->where('values.heading', 'Our values')
             ->has('values.items', 1)
-            ->has('categories', 5) // the collections mosaic: one large tile and four small
-            ->where('contact.phone', '+234 801 000 0000'));
+            ->where('collection.name', 'Lamps') // the first category that has a photo
+            ->where('collection.image.src', fn ($src) => str_contains($src, 'lamps.webp')));
     }
 
     public function test_about_page_hides_values_when_there_are_none(): void
